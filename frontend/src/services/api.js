@@ -1,4 +1,6 @@
-const BASE_URL = '/api';
+import { API_BASE_URL } from '../config/appConfig';
+
+const BASE_URL = API_BASE_URL;
 
 const getHeaders = () => {
   const token = localStorage.getItem('dhanwin_token') || localStorage.getItem('bhagyawin_token');
@@ -66,8 +68,8 @@ export const gameAPI = {
 };
 
 export const wingoAPI = {
-  getHistory: (mode = '1m', limit = 50) => apiCall(`/wingo/history/${mode}?limit=${limit}`, 'GET'),
-  getChart: (mode = '1m') => apiCall(`/wingo/chart/${mode}`, 'GET'),
+  getHistory: (mode = '1m', limit = 50, page = 1) => apiCall(`/wingo/history/${mode}?limit=${limit}&page=${page}`, 'GET'),
+  getChart: (mode = '1m', page = 1, limit = 10) => apiCall(`/wingo/chart/${mode}?page=${page}&limit=${limit}`, 'GET'),
   getMyBets: (mode = '1m', page = 1, limit = 10) => apiCall(`/wingo/my-bets/${mode}?page=${page}&limit=${limit}`, 'GET'),
   getAdminAnalytics: (timeRange = 'today') => apiCall(`/wingo/admin/analytics?timeRange=${timeRange}`, 'GET'),
 };

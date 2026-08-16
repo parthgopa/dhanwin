@@ -28,7 +28,7 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
   const fetchGameHistory = async (page = 1) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/wingo/history/${activeMode}?page=${page}&limit=10`).then(r => r.json());
+      const res = await wingoAPI.getHistory(activeMode, 10, page);
       if (res.success) {
         setGameHistory(res.history);
         setHistoryPage(res.page);
@@ -45,7 +45,7 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
   const fetchChart = async (page = 1) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/wingo/chart/${activeMode}?page=${page}&limit=10`).then(r => r.json());
+      const res = await wingoAPI.getChart(activeMode, page, 10);
       if (res.success) {
         setChartData(res);
         setChartPage(res.page);
@@ -102,8 +102,8 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${isSel
-                  ? 'bg-gradient-to-b from-[#fcd34d] via-[#f59e0b] to-[#d97706] text-black shadow-lg scale-[1.02]'
-                  : 'text-gray-400 hover:text-white'
+                ? 'bg-gradient-to-b from-[#fcd34d] via-[#f59e0b] to-[#d97706] text-black shadow-lg scale-[1.02]'
+                : 'text-gray-400 hover:text-white'
                 }`}
             >
               {tab.label}
@@ -138,8 +138,8 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                     </td>
                     <td className="p-3 text-center font-bold">
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${item.winningSize === 'BIG'
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         }`}>
                         {item.winningSize === 'BIG' ? 'Big' : 'Small'}
                       </span>
@@ -294,8 +294,8 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                   {/* Big/Small Badge */}
                   <div className="col-span-1 text-right pr-1">
                     <span className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[10px] font-black ${p.winningSize === 'BIG'
-                        ? 'bg-amber-500 text-black'
-                        : 'bg-blue-500 text-white'
+                      ? 'bg-amber-500 text-black'
+                      : 'bg-blue-500 text-white'
                       }`}>
                       {p.winningSize === 'BIG' ? 'B' : 'S'}
                     </span>
@@ -356,10 +356,10 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                         <WinGoBall num={bet.selectValue} size="md" />
                       ) : (
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs text-white shadow-md ${bet.selectValue === 'BIG' ? 'bg-amber-500' :
-                            bet.selectValue === 'SMALL' ? 'bg-blue-500' :
-                              bet.selectValue === 'RED' ? 'bg-red-500' :
-                                bet.selectValue === 'GREEN' ? 'bg-emerald-500' :
-                                  'bg-purple-600'
+                          bet.selectValue === 'SMALL' ? 'bg-blue-500' :
+                            bet.selectValue === 'RED' ? 'bg-red-500' :
+                              bet.selectValue === 'GREEN' ? 'bg-emerald-500' :
+                                'bg-purple-600'
                           }`}>
                           {bet.selectValue}
                         </div>
@@ -380,8 +380,8 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                     {/* Win / Loss Status & Net P&L */}
                     <div className="text-right">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase ${isWon
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                          : 'bg-red-500/20 text-red-400 border-red-500/40'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : 'bg-red-500/20 text-red-400 border-red-500/40'
                         }`}>
                         {isWon ? 'Win' : 'Lose'}
                       </span>
