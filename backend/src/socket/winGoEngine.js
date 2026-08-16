@@ -46,90 +46,6 @@ export const generatePeriodId = async (mode) => {
   return `${datePrefix}${config.roomCode}${String(counter.seq).padStart(4, '0')}`;
 };
 
-// ── 100-BOT SIMULATION POOL (MATCHING AVIATOR ENGINE) ─────────────────────────
-const BOT_NAMES_POOL = [
-  'Raj***', 'Pri***', 'Vik***', 'Sum***', 'Anu***', 'Dee***', 'Roh***', 'Poo***', 'Aak***', 'Nit***',
-  'Sid***', 'Man***', 'Kri***', 'Ash***', 'Jay***', 'Nar***', 'Sar***', 'Adi***', 'Moh***', 'Rav***',
-  'Ket***', 'Ruc***', 'Shu***', 'Bha***', 'Gau***', 'Tan***', 'Hars***', 'Ami***', 'Kal***', 'Lav***',
-  'Pra***', 'Neh***', 'San***', 'Var***', 'Yog***', 'Vin***', 'Arc***', 'Ruk***', 'Dev***', 'Cha***',
-  '9***3', '8***1', '7***4', '6***7', '9***8', '8***5', '7***0', '6***2', '9***6', '8***9',
-  '7***1', '9***5', '8***3', '7***7', '6***0', '9***2', '8***6', '7***9', '6***4', '9***1',
-  'Sri***', 'Mala***', 'Vish***', 'Ram***', 'Gopi***', 'Babu***', 'Hari***', 'Jaya***', 'Lak***', 'Mur***',
-  'Pal***', 'Kum***', 'Sha***', 'Raj***', 'Sub***', 'Vel***', 'Par***', 'Kar***', 'Ven***', 'Sel***',
-  '7***3', '8***0', '9***7', '6***9', '7***6', '8***4', '9***9', '6***1', '7***8', '8***2',
-  '9***0', '6***5', '7***2', '8***7', '9***4', '6***3', '7***5', '8***8', '9***3', '6***6',
-];
-
-const BOT_AVATARS = [
-  '🦁', '🐻', '🎃', '🍓', '🎮', '⚽', '🚀', '💎', '🔥', '👑', '🐯', '🎲', '🏆',
-  '🦊', '🐺', '🎯', '🌟', '⚡', '🎪', '🧊', '🌈', '🎸', '🏄', '🧩', '🎭', '🦋',
-  '🍀', '🎡', '🎰', '🦅', '🐉', '🌙', '☄️', '🎨', '🏔️', '🌊', '🎁', '🔮', '💫',
-];
-
-const WINGO_BOT_POOL = Array.from({ length: 100 }, (_, i) => ({
-  id: `bot_${i}`,
-  username: BOT_NAMES_POOL[i % BOT_NAMES_POOL.length],
-  avatar: BOT_AVATARS[i % BOT_AVATARS.length],
-}));
-
-// Build randomized simulated bot bets for a round
-const buildWinGoBotBets = (durationSec, lockSec) => {
-  const bets = [];
-  const bettingWindow = Math.max(1, durationSec - lockSec);
-  const shuffled = [...WINGO_BOT_POOL].sort(() => Math.random() - 0.5);
-
-  // 40-75 bots participate in each round
-  const participantCount = Math.floor(40 + Math.random() * 35);
-  const activeBots = shuffled.slice(0, participantCount);
-
-  for (const bot of activeBots) {
-    const rType = Math.random();
-    let selectType = 'SIZE';
-    let selectValue = 'BIG';
-
-    if (rType < 0.45) {
-      // Size bet
-      selectType = 'SIZE';
-      selectValue = Math.random() < 0.5 ? 'BIG' : 'SMALL';
-    } else if (rType < 0.80) {
-      // Color bet
-      selectType = 'COLOR';
-      const cRand = Math.random();
-      if (cRand < 0.45) selectValue = 'GREEN';
-      else if (cRand < 0.90) selectValue = 'RED';
-      else selectValue = 'VIOLET';
-    } else {
-      // Exact number bet
-      selectType = 'NUMBER';
-      selectValue = String(Math.floor(Math.random() * 10));
-    }
-
-    // Realistic amounts
-    const amounts = [10, 20, 50, 100, 200, 500, 1000];
-    const unitPrice = amounts[Math.floor(Math.random() * amounts.length)];
-    const multiplier = Math.random() < 0.8 ? 1 : Math.random() < 0.9 ? 5 : 10;
-    const totalAmount = unitPrice * multiplier;
-
-    // Distribute bet timing across the open betting window
-    const delaySec = Math.floor(1 + Math.random() * (bettingWindow - 1));
-
-    bets.push({
-      botId: bot.id,
-      username: bot.username,
-      avatar: bot.avatar,
-      selectType,
-      selectValue,
-      unitPrice,
-      multiplier,
-      totalAmount,
-      delaySec,
-      placed: false,
-    });
-  }
-
-  return bets;
-};
-
 // In-Memory state for all 4 rooms
 const roomsState = {
   '30s': null,
@@ -159,8 +75,6 @@ const initRoomRound = async (mode) => {
     serverSeedHash,
   });
 
-  const botSchedule = buildWinGoBotBets(config.durationSec, config.lockSec);
-
   roomsState[mode] = {
     mode,
     periodId,
@@ -173,11 +87,10 @@ const initRoomRound = async (mode) => {
     elapsedSec: 0,
     serverSeed,
     serverSeedHash,
-    // Live Exposure Tracking
+    // Live Exposure Tracking (Real Players Only)
     totalPool: 0,
     totalBetsCount: 0,
-    bets: [], // User bets
-    botSchedule, // 100-bot queue
+    bets: [], // Real user bets
     exposure: {
       numbers: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
       colors: { RED: 0, GREEN: 0, VIOLET: 0 },
@@ -447,31 +360,6 @@ export const startWinGoEngine = async (io) => {
       room.remainingSec = remainingSec;
       room.elapsedSec = elapsedSec;
 
-      // ── Process Progressive Bot Bets ───────────────────────────────────────
-      if (room.status === 'BETTING' && room.botSchedule) {
-        const newlyPlaced = [];
-        for (const b of room.botSchedule) {
-          if (!b.placed && b.delaySec <= elapsedSec) {
-            b.placed = true;
-            room.totalPool += b.totalAmount;
-            room.totalBetsCount += 1;
-
-            if (b.selectType === 'NUMBER') {
-              const num = Number(b.selectValue);
-              room.exposure.numbers[num] = (room.exposure.numbers[num] || 0) + b.totalAmount;
-            } else if (b.selectType === 'COLOR') {
-              const col = String(b.selectValue).toUpperCase();
-              room.exposure.colors[col] = (room.exposure.colors[col] || 0) + b.totalAmount;
-            } else if (b.selectType === 'SIZE') {
-              const sz = String(b.selectValue).toUpperCase();
-              room.exposure.sizes[sz] = (room.exposure.sizes[sz] || 0) + b.totalAmount;
-            }
-
-            newlyPlaced.push(b);
-          }
-        }
-      }
-
       // Lock state broadcast when 5 seconds or less remaining
       if (remainingSec <= room.lockSec && room.status === 'BETTING') {
         room.status = 'LOCKED';
@@ -513,10 +401,9 @@ export const emitWinGoAdminTelemetry = (io) => {
 
     const projectedOutcome = calculateLowestExposureOutcome(room);
 
-    // Count unique player identities (active bots + real users who bet)
+    // Count unique player identities (real users who bet)
     const userIds = new Set(room.bets.map(b => b.userId?.toString()).filter(Boolean));
-    const botIds = new Set((room.botSchedule || []).filter(b => b.placed).map(b => b.botId));
-    const playersCount = Math.max(room.totalBetsCount > 0 ? 1 : 0, userIds.size + botIds.size);
+    const playersCount = userIds.size;
 
     adminData[mode] = {
       mode,

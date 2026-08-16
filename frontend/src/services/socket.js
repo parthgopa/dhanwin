@@ -9,7 +9,7 @@ export const getSocket = () => {
     socket = io(SOCKET_URL || undefined, {
       auth: { token },
       autoConnect: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
     });
   }
   return socket;
@@ -23,7 +23,7 @@ export const reconnectSocket = () => {
   socket = io(SOCKET_URL || undefined, {
     auth: { token },
     autoConnect: true,
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
   });
   return socket;
 };

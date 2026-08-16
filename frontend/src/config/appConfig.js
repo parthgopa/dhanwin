@@ -1,24 +1,20 @@
 /**
  * Centralized Application & Environment Configuration
  * 
- * Switch effortlessly between Local Development and Production Hosting:
- * - In Development (npm run dev): Automatically uses local proxy '/api' & local WebSocket
- * - In Production (npm run build / live): Automatically points to https://dhanwin.cloud/api & https://dhanwin.cloud
- * 
- * You can also override these dynamically via environment variables:
- * - VITE_API_URL=https://dhanwin.cloud/api
- * - VITE_SOCKET_URL=https://dhanwin.cloud
+ * - Frontend Domain: https://dhanwin.cloud (Hostinger Static Web Hosting)
+ * - Backend API & WebSockets: https://api.dhanwin.cloud (Coolify VPS on 76.13.246.78)
+ * - Local Development: Automatically proxies via Vite to http://localhost:5000
  */
 
 export const IS_DEV = import.meta.env.DEV;
 
-// Production Live Backend Endpoints
-export const LIVE_API_URL = 'https://dhanwin.cloud/api';
-export const LIVE_SOCKET_URL = 'https://dhanwin.cloud';
+// 🌐 Live Production Hosted Endpoints
+export const LIVE_API_URL = 'https://api.dhanwin.cloud/api';
+export const LIVE_SOCKET_URL = 'https://api.dhanwin.cloud';
 
-// Local Development Endpoints
+// 💻 Local Development Endpoints
 export const DEV_API_URL = '/api';
-export const DEV_SOCKET_URL = undefined; // Uses current window host via Vite proxy
+export const DEV_SOCKET_URL = undefined;
 
 // Active Resolved URLs
 export const API_BASE_URL =

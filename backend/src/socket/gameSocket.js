@@ -29,7 +29,7 @@ let aviatorState = {
   isOverridden: false,
   overrideType: 'NONE',
   history: [], // Recent 50 crashed multipliers
-  totalBetsThisRound: 0, // Real count of bets placed this round (bots + users)
+  totalBetsThisRound: 0, // Real count of bets placed by live players
   activeBetsThisRound: 0, // Counts down as cashouts happen
 };
 
@@ -48,106 +48,9 @@ let aviatorTimer = null;
 // can immediately trigger a crash without needing access to the inner closure.
 let forceCrashCallback = null;
 
-// ── 100-BOT POOL WITH PERSONALITY TYPES ──────────────────────────────────────
-//
-// Each bot has a "personality" that controls:
-//  - How often they skip rounds (realistic — real players skip too)
-//  - What they bet (₹ range)
-//  - When they cash out (target multiplier range)
-//  - Whether they sometimes get "greedy" and hold past their target
-//
-// House edge is guaranteed by SCALE=0.90 regardless of bot behavior.
-// Bots primarily serve to create a realistic live-bets feed and add volume.
-
-const BOT_PERSONALITIES = [
-  // type, weight%, betMin, betMax, targetMin, targetMax, skipRate, greedyRate
-  { type: 'SCALPER', weight: 20, betMin: 50, betMax: 300, targetMin: 1.05, targetMax: 1.30, skipRate: 0.10, greedyRate: 0.00 },
-  { type: 'CONSERVATIVE', weight: 30, betMin: 100, betMax: 500, targetMin: 1.25, targetMax: 1.80, skipRate: 0.15, greedyRate: 0.05 },
-  { type: 'MODERATE', weight: 28, betMin: 200, betMax: 1000, targetMin: 1.80, targetMax: 3.50, skipRate: 0.20, greedyRate: 0.10 },
-  { type: 'AGGRESSIVE', weight: 16, betMin: 300, betMax: 2000, targetMin: 3.00, targetMax: 8.00, skipRate: 0.25, greedyRate: 0.15 },
-  { type: 'GAMBLER', weight: 6, betMin: 100, betMax: 5000, targetMin: 6.00, targetMax: 20.0, skipRate: 0.30, greedyRate: 0.40 },
-];
-
-const BOT_AVATARS = [
-  '🦁', '🐻', '🎃', '🧢', '🍓', '🎮', '⚽', '🕶️', '🚀', '💎', '🔥', '👑', '🐯', '🎲', '🏆',
-  '🦊', '🐺', '🎯', '🌟', '⚡', '🎪', '🧊', '🌈', '🎸', '🏄', '🧩', '🎭', '🦋', '🍀', '🎡',
-  '🎰', '🦅', '🐉', '🌙', '☄️', '🎻', '🎨', '🏔️', '🌊', '🎁', '🔮', '🧲', '💫', '🎵', '🦜',
-  '🐊', '🦈', '🏹', '🎠', '💥', '🎬', '🎤', '🛸', '🌺', '🍁', '🐬', '🦁', '🧿', '🎪', '🌴',
-  '🦚', '🐋', '🌋', '🎯', '🚁', '🦁', '🐙', '🌠', '🎑', '🧸', '🦞', '🍄', '🌵', '🦓', '🏊',
-  '🦦', '🐦', '🌻', '🎃', '🏇', '🦩', '🐌', '🌿', '🎢', '🦔', '🐣', '🌸', '🎠', '🐤', '🌞',
-  '🦝', '🐍', '🌊', '🎭', '🐧', '🌍', '🎈', '🦭', '🐠', '🎠',
-];
-
-const BOT_NAMES_POOL = [
-  'Raj***', 'Pri***', 'Vik***', 'Sum***', 'Anu***', 'Dee***', 'Roh***', 'Poo***', 'Aak***', 'Nit***',
-  'Sid***', 'Man***', 'Kri***', 'Ash***', 'Jay***', 'Nar***', 'Sar***', 'Adi***', 'Moh***', 'Rav***',
-  'Ket***', 'Ruc***', 'Shu***', 'Bha***', 'Gau***', 'Tan***', 'Hars***', 'Ami***', 'Kal***', 'Lav***',
-  'Pra***', 'Neh***', 'San***', 'Var***', 'Yog***', 'Vin***', 'Arc***', 'Ruk***', 'Dev***', 'Cha***',
-  '9***3', '8***1', '7***4', '6***7', '9***8', '8***5', '7***0', '6***2', '9***6', '8***9',
-  '7***1', '9***5', '8***3', '7***7', '6***0', '9***2', '8***6', '7***9', '6***4', '9***1',
-  'Sri***', 'Mala***', 'Vish***', 'Ram***', 'Gopi***', 'Babu***', 'Hari***', 'Jaya***', 'Lak***', 'Mur***',
-  'Pal***', 'Kum***', 'Sha***', 'Raj***', 'Sub***', 'Vel***', 'Par***', 'Kar***', 'Ven***', 'Sel***',
-  '7***3', '8***0', '9***7', '6***9', '7***6', '8***4', '9***9', '6***1', '7***8', '8***2',
-  '9***0', '6***5', '7***2', '8***7', '9***4', '6***3', '7***5', '8***8', '9***3', '6***6',
-];
-
-function pickPersonality() {
-  const r = Math.random() * 100;
-  let cum = 0;
-  for (const p of BOT_PERSONALITIES) {
-    cum += p.weight;
-    if (r < cum) return p;
-  }
-  return BOT_PERSONALITIES[2];
-}
-
-// Pre-build the 100 bot objects (fixed identities per server session)
-const BOT_POOL = Array.from({ length: 100 }, (_, i) => ({
-  id: i,
-  username: BOT_NAMES_POOL[i % BOT_NAMES_POOL.length],
-  avatar: BOT_AVATARS[i % BOT_AVATARS.length],
-  personality: pickPersonality(),
-}));
-
-/**
- * Build simulated bets for a round.
- * ~60-80% of the pool participates; each bot independently decides
- * whether to skip based on its personality's skipRate.
- */
-function buildSimulatedBets(crashPoint) {
-  const bets = [];
-  // Shuffle the pool order each round so the feed looks different
-  const shuffled = [...BOT_POOL].sort(() => Math.random() - 0.5);
-
-  for (const bot of shuffled) {
-    const p = bot.personality;
-    // Skip round probabilistically — mirrors real users who don't always bet
-    if (Math.random() < p.skipRate) continue;
-
-    const betAmount = Math.round((p.betMin + Math.random() * (p.betMax - p.betMin)) / 10) * 10;
-
-    // Target multiplier: random within personality's range
-    let targetMultiplier = +(p.targetMin + Math.random() * (p.targetMax - p.targetMin)).toFixed(2);
-
-    // "Greedy" flag: bot will NOT auto-cashout at target, will hold and likely lose
-    const isGreedy = Math.random() < p.greedyRate;
-    if (isGreedy) {
-      // Greedy bots push their target well above the crash point — they usually lose
-      targetMultiplier = +(targetMultiplier * (1.5 + Math.random() * 2.5)).toFixed(2);
-    }
-
-    bets.push({
-      username: bot.username,
-      avatar: bot.avatar,
-      personality: p.type,
-      betAmount,
-      targetMultiplier,
-      status: 'PLACED',
-      cashOutMultiplier: null,
-      payoutAmount: 0,
-    });
-  }
-  return bets;
+// Live Real Player Gaming Mode (Bot Simulation Removed)
+function buildSimulatedBets() {
+  return [];
 }
 
 export const initGameSockets = (server) => {
@@ -296,14 +199,27 @@ export const initGameSockets = (server) => {
 
         aviatorState.bets.push(activeBet);
         aviatorState.roundPoolINR += betAmount;
+
+        // Add real player bet to live multiplayer feed
+        const liveFeedBet = {
+          username: user.username,
+          avatar: '👤',
+          betAmount,
+          status: 'PLACED',
+          cashOutMultiplier: null,
+          payoutAmount: 0,
+        };
+        aviatorState.simulatedBets.push(liveFeedBet);
+
         // Increment real counters so frontend shows accurate numbers
-        aviatorState.totalBetsThisRound += 1;
-        aviatorState.activeBetsThisRound += 1;
+        aviatorState.totalBetsThisRound = aviatorState.bets.length;
+        aviatorState.activeBetsThisRound = aviatorState.bets.filter((b) => b.status === 'PLACED').length;
 
         socket.emit('balance_update', { newBalance: user.walletBalance });
         socket.emit('aviator:bet_success', { activeBet });
 
         io.emit('aviator:bets_update', {
+          simulatedBets: aviatorState.simulatedBets,
           activeBetsCount: aviatorState.activeBetsThisRound,
           totalBetsCount: aviatorState.totalBetsThisRound,
         });
@@ -332,9 +248,18 @@ export const initGameSockets = (server) => {
         bet.cashOutMultiplier = cashOutMultiplier;
         bet.payoutAmount = payoutAmount;
 
+        const feedBet = aviatorState.simulatedBets.find(
+          (b) => b.username === socket.user.username && b.status === 'PLACED'
+        );
+        if (feedBet) {
+          feedBet.status = 'CASHOUT';
+          feedBet.cashOutMultiplier = cashOutMultiplier;
+          feedBet.payoutAmount = payoutAmount;
+        }
+
         aviatorState.totalWinINR += payoutAmount;
         // Decrement active bets counter on manual cashout
-        aviatorState.activeBetsThisRound = Math.max(0, aviatorState.activeBetsThisRound - 1);
+        aviatorState.activeBetsThisRound = aviatorState.bets.filter((b) => b.status === 'PLACED').length;
 
         const user = await User.findById(socket.user._id);
         user.walletBalance += payoutAmount;
@@ -358,6 +283,7 @@ export const initGameSockets = (server) => {
           cashOutMultiplier,
           payoutAmount,
           totalWinINR: aviatorState.totalWinINR,
+          simulatedBets: aviatorState.simulatedBets,
           activeBetsCount: aviatorState.activeBetsThisRound,
           totalBetsCount: aviatorState.totalBetsThisRound,
         });
@@ -499,19 +425,12 @@ const startAviatorLoop = (io) => {
     aviatorState.status = 'BETTING';
     aviatorState.countdownSec = 5;
     aviatorState.bets = [];
+    aviatorState.simulatedBets = [];
     aviatorState.totalWinINR = 0.00;
     aviatorState.roundPoolINR = 0.00;
     aviatorState.activeExposureINR = 0.00;
-
-    // Build fresh simulated bets from the 100-bot pool
-    aviatorState.simulatedBets = buildSimulatedBets(aviatorState.crashPoint);
-    for (const sb of aviatorState.simulatedBets) {
-      aviatorState.roundPoolINR += sb.betAmount;
-    }
-
-    // Real bet counters — start equal to sim bets, updated as users join + cashouts happen
-    aviatorState.totalBetsThisRound = aviatorState.simulatedBets.length;
-    aviatorState.activeBetsThisRound = aviatorState.simulatedBets.length;
+    aviatorState.totalBetsThisRound = 0;
+    aviatorState.activeBetsThisRound = 0;
 
     await GameSession.create({
       gameId: aviatorState.gameId,
@@ -606,34 +525,8 @@ const startAviatorLoop = (io) => {
         clearInterval(aviatorTimer);
         aviatorState.currentMultiplier = aviatorState.crashPoint;
         await triggerCrash();
-      } else {
         aviatorState.currentMultiplier = current;
         io.emit('aviator:tick', { multiplier: current });
-
-        // Simulated Bot Cashouts
-        for (const simBet of aviatorState.simulatedBets) {
-          if (simBet.status === 'PLACED' && current >= Number(simBet.targetMultiplier) && current < aviatorState.crashPoint) {
-            simBet.status = 'CASHOUT';
-            simBet.cashOutMultiplier = current;
-            const winINR = Math.floor(simBet.betAmount * current * 100) / 100;
-            simBet.payoutAmount = winINR;
-            aviatorState.totalWinINR += winINR;
-
-            // Decrement active bets counter
-            aviatorState.activeBetsThisRound = Math.max(0, aviatorState.activeBetsThisRound - 1);
-
-            io.emit('aviator:player_cashed_out', {
-              username: simBet.username,
-              avatar: simBet.avatar,
-              cashOutMultiplier: current,
-              payoutAmount: winINR,
-              totalWinINR: aviatorState.totalWinINR,
-              simulatedBets: aviatorState.simulatedBets,
-              activeBetsCount: aviatorState.activeBetsThisRound,
-              totalBetsCount: aviatorState.totalBetsThisRound,
-            });
-          }
-        }
 
         // Real Users Auto Cashouts
         for (const bet of aviatorState.bets) {
