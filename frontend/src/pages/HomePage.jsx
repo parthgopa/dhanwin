@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Sparkles, Gift, Award, Compass, User, ChevronRight, Volume2 } from 'lucide-react';
+import { Flame, Sparkles, Gift, Award, Compass, User, ChevronRight, Volume2, ShieldCheck, ArrowDownLeft, ArrowUpRight, AlertCircle, Zap } from 'lucide-react';
 import dhanwinBannerImg from '../images/dhanwin-hero-banner.jpg';
 import wingoImg from '../images/wingo-logo.png';
 import aviatorImg from '../images/aviator-logo.png';
@@ -8,9 +8,9 @@ import cricketImg from '../images/cricket-logo.jpeg';
 import scrollWinImg from '../images/scroll-win-logo.jpeg';
 import gorushImg from '../images/gorush-logo.jpeg';
 
-export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth }) => {
+export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth, onOpenSidebar }) => {
   return (
-    <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 pb-20 font-sans">
+    <div className="max-w-4xl mx-auto space-y-3.5 sm:space-y-4 pb-36 sm:pb-24 font-sans">
 
       {/* 1. OFFICIAL DHANWIN HERO IMAGE BANNER (Compact & Uncropped) */}
       <div className="space-y-1.5 max-w-3xl mx-auto">
@@ -33,43 +33,80 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth }) => {
             </button>
             <button
               onClick={onOpenDeposit}
-              className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 bg-[#0b0e14]/80 hover:bg-black text-white font-bold rounded-xl text-[10px] sm:text-xs border border-amber-400/40 backdrop-blur-md transition"
+              className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 bg-[#0b0e14]/80 hover:bg-black text-white font-bold rounded-xl text-[10px] sm:text-xs border border-amber-400/40 backdrop-blur-md transition active:scale-95"
             >
               Deposit Funds
             </button>
           </div>
         </div>
-
-        {/* Carousel Indicator Dots */}
-        <div className="flex items-center justify-center gap-1.5 pt-0.5">
-          <div className="w-5 h-1.5 rounded-full bg-amber-400" />
-          <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-          <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-          <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-          <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-        </div>
       </div>
 
-      {/* 2. DEPOSIT & WITHDRAWAL NOTICE BAR (Matching reference layout) */}
+      {/* 2. DEPOSIT & WITHDRAWAL NOTICE TICKER */}
       <div className="bg-gradient-to-r from-[#1f103d] via-[#170e2d] to-[#1a0f35] border border-purple-500/30 rounded-2xl px-3.5 sm:px-5 py-2.5 flex items-center justify-between shadow-lg gap-3">
         <div className="flex items-center gap-2 overflow-hidden text-xs">
           <Volume2 className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
           <span className="font-bold text-amber-300 shrink-0 text-[11px] sm:text-xs">
-            【💰 Deposit & Withdrawal Notice】
+            【💰 Notice】
           </span>
           <span className="text-gray-300 truncate text-[11px] sm:text-xs">
-            Instant 24/7 UPI deposits (Min ₹1) & fast automated withdrawals (Min ₹110)!
+            UPI Deposits (Min ₹100) added in 5-6 hours. Withdrawals (Min ₹300, Max ₹5,000)!
           </span>
         </div>
         <button
           onClick={onOpenDeposit}
-          className="shrink-0 px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-extrabold text-[11px] shadow hover:scale-105 active:scale-95 transition"
+          className="shrink-0 px-3 py-1 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-extrabold text-[11px] shadow hover:scale-105 active:scale-95 transition"
         >
-          Details
+          Deposit
         </button>
       </div>
 
-      {/* 3. FEATURED GAMES (Rounded Image Tiles matching reference screenshot) */}
+      {/* 3. OFFICIAL DEPOSIT & WITHDRAWAL NOTICE CARD */}
+      <div className="bg-gradient-to-br from-[#130926] via-[#0f071f] to-[#160c2b] border border-purple-500/30 rounded-2xl p-3.5 sm:p-4 shadow-xl text-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span className="font-black text-white text-xs sm:text-sm uppercase tracking-wide">
+              Official Deposit & Withdrawal Notice
+            </span>
+          </div>
+          <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+            24/7 Active
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+          {/* Deposit Info Pill */}
+          <div className="bg-[#1a0e36]/70 border border-purple-500/20 rounded-xl p-3 flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <ArrowDownLeft className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="font-extrabold text-amber-400 text-xs">UPI & QR Deposit</div>
+              <p className="text-[11px] text-gray-300 leading-tight">
+                Minimum Deposit is <strong>₹100</strong> with <strong>0% fee</strong>.
+              </p>
+              <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-[10.5px] text-amber-300 font-bold leading-tight">
+                📌 Note: Deposit will be verified & added to your account in <strong>5-6 hours</strong> after submitting the correct 12-digit UTR.
+              </div>
+            </div>
+          </div>
+
+          {/* Withdrawal Info Pill */}
+          <div className="bg-[#1a0e36]/70 border border-purple-500/20 rounded-xl p-3 flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="font-extrabold text-emerald-400 text-xs">Fast Automated Withdrawal</div>
+              <p className="text-[11px] text-gray-300 leading-tight">
+                Withdrawal Range: <strong>₹300 – ₹5,000</strong> directly to Bank Account or UPI. Secure payout with 24h account verification.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. FEATURED GAMES (Rounded Image Tiles matching reference screenshot) */}
       <div className="space-y-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -181,43 +218,6 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth }) => {
         </div>
       </div>
 
-      {/* 3. REWARD BANNERS SECTION */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-
-        {/* Daily Login Reward Card */}
-        <div className="bg-gradient-to-r from-amber-900/30 via-[#151a23] to-[#151a23] border border-amber-500/30 rounded-3xl p-5 shadow-xl flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Daily Login Reward</span>
-            <h3 className="text-lg font-black text-white">Claim Free Cash Awards</h3>
-            <p className="text-xs text-gray-400">Log in every day to claim bonus wallet cash!</p>
-            <button
-              onClick={onOpenAuth}
-              className="mt-2 px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-extrabold rounded-xl text-xs shadow transition active:scale-95"
-            >
-              Claim Now
-            </button>
-          </div>
-          <Gift className="w-14 h-14 text-amber-400 shrink-0 opacity-80" />
-        </div>
-
-        {/* Limited Time Event Card */}
-        <div className="bg-gradient-to-r from-purple-900/30 via-[#151a23] to-[#151a23] border border-purple-500/30 rounded-3xl p-5 shadow-xl flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Limited Time Event</span>
-            <h3 className="text-lg font-black text-white">Fortune Wheel Spin</h3>
-            <p className="text-xs text-gray-400">Spin the wheel to win up to ₹5,000 cash prizes!</p>
-            <button
-              onClick={onOpenAuth}
-              className="mt-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-extrabold rounded-xl text-xs shadow transition active:scale-95"
-            >
-              Claim Now
-            </button>
-          </div>
-          <Award className="w-14 h-14 text-purple-400 shrink-0 opacity-80" />
-        </div>
-
-      </div>
-
       {/* 4. BOTTOM DOCK MOBILE NAVIGATION BAR */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#151a23]/95 backdrop-blur-lg border-t border-[#232b3b] px-6 py-2.5 flex items-center justify-around text-xs font-bold text-gray-400">
         <button
@@ -245,7 +245,7 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth }) => {
         </button>
 
         <button
-          onClick={onOpenAuth}
+          onClick={onOpenSidebar || onOpenAuth}
           className="flex flex-col items-center gap-1 hover:text-white active:scale-95 transition"
         >
           <User className="w-5 h-5 text-blue-400" />

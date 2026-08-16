@@ -35,6 +35,7 @@ export const AviatorAdmin = ({ socket, showToast }) => {
 
   // New round popup
   const [showNewRoundPopup, setShowNewRoundPopup] = useState(false);
+  const [liveMultiplier, setLiveMultiplier] = useState(1.00);
   const newRoundTimerRef = useRef(null);
 
   const fetchAnalytics = useCallback(async () => {
@@ -69,6 +70,7 @@ export const AviatorAdmin = ({ socket, showToast }) => {
     socket.on('aviator:round_preparing', (data) => {
       setGamePhase('BETTING');
       setCountdownSec(data?.countdownSec ?? 5);
+      setLiveMultiplier(1.00);
       setShowNewRoundPopup(true);
     });
 
@@ -80,15 +82,25 @@ export const AviatorAdmin = ({ socket, showToast }) => {
     socket.on('aviator:round_started', () => {
       setGamePhase('RUNNING');
       setCountdownSec(0);
+      setLiveMultiplier(1.00);
       setShowNewRoundPopup(true);
       if (newRoundTimerRef.current) clearTimeout(newRoundTimerRef.current);
       newRoundTimerRef.current = setTimeout(() => setShowNewRoundPopup(false), 2000);
     });
 
+    socket.on('aviator:tick', (data) => {
+      if (data?.multiplier) {
+        setLiveMultiplier(data.multiplier);
+      }
+    });
+
     socket.on('aviator:crashed', (data) => {
       setGamePhase('CRASHED');
       setCrashCount(c => c + 1);
-      if (data?.crashPoint) setLastCrashedAt(Number(data.crashPoint));
+      if (data?.crashPoint) {
+        setLastCrashedAt(Number(data.crashPoint));
+        setLiveMultiplier(Number(data.crashPoint));
+      }
       setTimeout(() => fetchAnalytics(), 1500);
     });
 
@@ -99,6 +111,7 @@ export const AviatorAdmin = ({ socket, showToast }) => {
       socket.off('aviator:round_preparing');
       socket.off('aviator:countdown_tick');
       socket.off('aviator:round_started');
+      socket.off('aviator:tick');
       socket.off('aviator:crashed');
       socket.off('admin:risk_alert');
       if (newRoundTimerRef.current) clearTimeout(newRoundTimerRef.current);
@@ -260,7 +273,7 @@ export const AviatorAdmin = ({ socket, showToast }) => {
             </div>
           ) : (
             <div className="text-2xl font-black font-mono text-emerald-400">
-              {(telemetry?.currentMultiplier || 1).toFixed(2)}x
+              {Number(liveMultiplier || telemetry?.currentMultiplier || 1).toFixed(2)}x
             </div>
           )}
 

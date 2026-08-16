@@ -131,7 +131,7 @@ export const WinGoUserOutcomeModal = ({ outcome, onClose }) => {
                     Bonus
                   </div>
                   <div className="text-3xl font-black font-mono text-[#ef4444] tracking-tight">
-                    ₹{Math.round(Number(outcome.wonAmount))}
+                    ₹{Number(outcome.wonAmount || 0).toFixed(2)}
                   </div>
                 </>
               ) : (

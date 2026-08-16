@@ -4,7 +4,7 @@ import { walletAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // ── MINIMUM DEPOSIT AMOUNT CONFIGURATION ────────────────────────────────────────
-export const MIN_DEPOSIT_AMOUNT = 1;
+export const MIN_DEPOSIT_AMOUNT = 100;
 
 export const DepositModal = ({ isOpen, onClose }) => {
   const { showToast } = useAuth();
@@ -139,7 +139,7 @@ export const DepositModal = ({ isOpen, onClose }) => {
 
             {/* Quick Presets */}
             <div className="grid grid-cols-4 gap-2">
-              {[1, 50, 100, 500].map((preset) => (
+              {[100, 200, 500, 1000].map((preset) => (
                 <button
                   type="button"
                   key={preset}
@@ -241,6 +241,9 @@ export const DepositModal = ({ isOpen, onClose }) => {
                 </p>
                 <p className="text-red-400 font-semibold">
                   ⚠️ If an invalid, wrong, or mismatched UTR is entered, the payment will NOT be added to your account.
+                </p>
+                <p className="text-amber-300 font-semibold pt-0.5">
+                  ⏱️ Note: Once verified with banking ledger, your deposit balance will be added in <strong>5-6 hours</strong>.
                 </p>
               </div>
             </div>

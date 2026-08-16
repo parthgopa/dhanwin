@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Lock, User, ArrowRight, Flame } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight, Flame, Eye, EyeOff } from 'lucide-react';
 import { authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,6 +7,7 @@ export const AdminLogin = ({ onLoginSuccess }) => {
   const { loginUser, showToast } = useAuth();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('adminpassword123');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -54,12 +55,19 @@ export const AdminLogin = ({ onLoginSuccess }) => {
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[#0b0e14] border border-[#232b3b] focus:border-red-500 rounded-xl py-3 pl-9 pr-4 text-sm text-white outline-none"
+              className="w-full bg-[#0b0e14] border border-[#232b3b] focus:border-red-500 rounded-xl py-3 pl-9 pr-11 text-sm text-white outline-none"
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-400 transition"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 

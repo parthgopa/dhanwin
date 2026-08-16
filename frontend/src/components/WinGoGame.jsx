@@ -10,9 +10,12 @@ import { WinGoUserOutcomeModal } from './wingo/WinGoUserOutcomeModal';
 import { wingoAPI } from '../services/api';
 import { BookOpen, X } from 'lucide-react';
 
+import { GameConnectionWatchdog } from './common/GameConnectionWatchdog';
+
 export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
   const { user, updateBalance, showToast } = useAuth();
   const socketRef = useRef(null);
+  const [lastEventTime, setLastEventTime] = useState(Date.now());
 
   // Active Mode State: '30s' | '1m' | '3m' | '5m' (Default 30s)
   const [activeMode, setActiveMode] = useState('30s');
@@ -48,13 +51,22 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
   // Fetch Initial History for Balls preview
   const fetchRecentBalls = async (mode) => {
     try {
-      const res = await wingoAPI.getHistory(mode, 5);
-      if (res.success && res.history.length > 0) {
+      const res = await wingoAPI.getGameHistory(mode, 1, 5);
+      if (res.history && res.history.length > 0) {
         setRecentBalls(res.history.map(h => h.winningNumber));
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleReconnect = () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('wingo:join_room', { mode: activeMode });
+    }
+    fetchRecentBalls(activeMode);
+    setLastEventTime(Date.now());
   };
 
   // Socket Connection & Room Subscription
@@ -70,6 +82,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
         setPeriodId(data.periodId);
         setRemainingSec(data.remainingSec);
         setRoomStatus(data.status);
+        setLastEventTime(Date.now());
       }
     });
 
@@ -78,6 +91,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
         setPeriodId(data.periodId);
         setRemainingSec(data.remainingSec);
         setRoomStatus(data.status);
+        setLastEventTime(Date.now());
       }
     });
 
@@ -85,6 +99,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.mode === activeMode) {
         setRoomStatus('LOCKED');
         setBetModalOpen(false); // Close bet modal if user had it open
+        setLastEventTime(Date.now());
       }
     });
 
@@ -93,6 +108,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
         setPeriodId(data.periodId);
         setRemainingSec(data.remainingSec);
         setRoomStatus('BETTING');
+        setLastEventTime(Date.now());
       }
     });
 
@@ -101,6 +117,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.mode === activeMode) {
         setLastRoundEvent(data);
         setRecentBalls(prev => [data.winningNumber, ...prev.slice(0, 4)]);
+        setLastEventTime(Date.now());
       }
     });
 
@@ -110,11 +127,13 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.newBalance !== undefined) {
         updateBalance(data.newBalance);
       }
+      setLastEventTime(Date.now());
     });
 
     socket.on('wingo:bet_placed', (data) => {
       updateBalance(data.newBalance);
       showBetToast(data.selectValue, data.totalAmount);
+      setLastEventTime(Date.now());
     });
 
     socket.on('wingo:bet_error', (data) => {
@@ -149,6 +168,10 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
       onOpenAuth();
       return;
     }
+    if (user.isBlocked) {
+      showToast('Your account is blocked. You cannot place bets.', 'error');
+      return;
+    }
     if (roomStatus === 'LOCKED' || remainingSec <= 5) {
       showToast('Betting is locked for the current period', 'error');
       return;
@@ -163,6 +186,10 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
   // Confirm Bet Placement
   const handleConfirmBet = (betData) => {
     if (!socketRef.current) return;
+    if (user?.isBlocked) {
+      showToast('Your account is blocked. You cannot place bets.', 'error');
+      return;
+    }
     socketRef.current.emit('wingo:place_bet', {
       mode: activeMode,
       ...betData,
@@ -178,7 +205,7 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto pb-12 font-sans relative">
+    <div className="w-full max-w-6xl mx-auto pb-36 sm:pb-20 font-sans relative">
       
       {/* Bet Placed Notification Banner */}
       {betToast && (
@@ -303,6 +330,12 @@ export const WinGoGame = ({ onOpenDeposit, onOpenAuth }) => {
         </div>
       )}
 
+      {/* ── CONNECTION & BACKGROUND RESILIENCE WATCHDOG ─────────────────────── */}
+      <GameConnectionWatchdog
+        gameName="WinGo Lottery"
+        lastEventTimestamp={lastEventTime}
+        onReconnect={handleReconnect}
+      />
     </div>
   );
 };

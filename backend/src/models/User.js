@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     default: '',
+    trim: true,
+    lowercase: true,
   },
   passwordHash: {
     type: String,
@@ -36,6 +38,10 @@ const userSchema = new mongoose.Schema({
     default: 'bhagya_client_seed_default',
   },
   isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+  isExcludedFromStats: {
     type: Boolean,
     default: false,
   },

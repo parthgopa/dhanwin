@@ -4,6 +4,7 @@ import { WinGoBet } from '../models/WinGoBet.js';
 import { Counter } from '../models/Counter.js';
 import { User } from '../models/User.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
+import { activeLiveSockets, broadcastLivePlayersCount } from './gameSocket.js';
 
 // Room codes matching reference screenshot style: 20260815100010951
 const ROOM_CONFIGS = {
@@ -433,6 +434,12 @@ export const initWinGoSocketHandlers = (io, socket) => {
     Object.keys(ROOM_CONFIGS).forEach(m => socket.leave(`wingo:room:${m}`));
     socket.join(`wingo:room:${validMode}`);
 
+    const entry = activeLiveSockets.get(socket.id);
+    if (entry) {
+      entry.game = 'WINGO';
+      broadcastLivePlayersCount(io);
+    }
+
     const room = roomsState[validMode];
     if (room) {
       socket.emit('wingo:room_state', {
@@ -476,9 +483,17 @@ export const initWinGoSocketHandlers = (io, socket) => {
         return socket.emit('wingo:bet_error', { message: 'Invalid bet amount' });
       }
 
-      // Check User Wallet
-      const user = await User.findById(socket.user.id);
-      if (!user || user.walletBalance < totalAmount) {
+      // Check User Wallet & Status
+      const user = await User.findById(socket.user.id || socket.user._id);
+      if (!user) {
+        return socket.emit('wingo:bet_error', { message: 'User account not found' });
+      }
+
+      if (user.isBlocked) {
+        return socket.emit('wingo:bet_error', { message: 'Your account is blocked. You cannot place bets.' });
+      }
+
+      if (user.walletBalance < totalAmount) {
         return socket.emit('wingo:bet_error', { message: 'Insufficient wallet balance' });
       }
 

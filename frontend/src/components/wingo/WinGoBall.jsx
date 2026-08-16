@@ -1,20 +1,22 @@
 import React from 'react';
 
 /**
- * Pixel-Perfect Lottery Ball with 4 circles popping outside the ball
- * Exact replica of the user's reference image
+ * Premium 3D WinGo Lottery Ball
+ * - Clean spherical ball with specular highlights and inner number disc
+ * - 4 outer corner circles completely removed
+ * - Mobile responsive sizing (compact on small phones, 25% larger on medium/desktop)
  */
 export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled = false }) => {
   const n = Number(num);
 
   const sizeMap = {
-    xs: 'w-6 h-6',
-    sm: 'w-8 h-8 sm:w-9 sm:h-9',
-    md: 'w-10 h-10 sm:w-12 sm:h-12',
-    lg: 'w-14 h-14 sm:w-16 sm:h-16',
-    xl: 'w-18 h-18 sm:w-22 sm:h-22',
+    xs: 'w-5 h-5 sm:w-7 sm:h-7',
+    sm: 'w-6 h-6 min-[380px]:w-7 min-[380px]:h-7 sm:w-9 sm:h-9',
+    md: 'w-9 h-9 sm:w-12 sm:h-12',
+    lg: 'w-12 h-12 min-[380px]:w-14 min-[380px]:h-14 sm:w-18 sm:h-18',
+    xl: 'w-16 h-16 sm:w-24 sm:h-24',
   };
-  const dimensionClass = sizeMap[size] || size;
+  const dimensionClass = className ? className : (sizeMap[size] || size);
 
   // Font color for center number
   const getNumberColor = (val) => {
@@ -30,26 +32,26 @@ export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled 
     <div
       onClick={!disabled && onClick ? onClick : undefined}
       className={`relative inline-flex items-center justify-center shrink-0 select-none ${dimensionClass} ${
-        onClick && !disabled ? 'cursor-pointer hover:scale-110 active:scale-95 transition-transform' : ''
-      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''} ${className}`}
+        onClick && !disabled ? 'cursor-pointer hover:scale-105 active:scale-95 transition-transform' : ''
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
     >
       <svg
         viewBox="0 0 100 100"
         className="w-full h-full overflow-visible drop-shadow-md"
       >
         <defs>
-          {/* Red Gradient */}
-          <radialGradient id={`red_${idSuffix}`} cx="35%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#ff5e6c" />
-            <stop offset="60%" stopColor="#ef4444" />
-            <stop offset="100%" stopColor="#b91c1c" />
+          {/* Red Radial Gradient */}
+          <radialGradient id={`red_${idSuffix}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#ff758c" />
+            <stop offset="45%" stopColor="#ef4444" />
+            <stop offset="100%" stopColor="#991b1b" />
           </radialGradient>
 
-          {/* Green Gradient */}
-          <radialGradient id={`green_${idSuffix}`} cx="35%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#34d399" />
-            <stop offset="60%" stopColor="#10b981" />
-            <stop offset="100%" stopColor="#047857" />
+          {/* Green Radial Gradient */}
+          <radialGradient id={`green_${idSuffix}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#4ade80" />
+            <stop offset="45%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#065f46" />
           </radialGradient>
 
           {/* Ball 0: Red & Violet Diagonal Split */}
@@ -57,7 +59,7 @@ export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled 
             <stop offset="0%" stopColor="#ef4444" />
             <stop offset="48%" stopColor="#ef4444" />
             <stop offset="52%" stopColor="#a855f7" />
-            <stop offset="100%" stopColor="#7e22ce" />
+            <stop offset="100%" stopColor="#6b21a8" />
           </linearGradient>
 
           {/* Ball 5: Green & Violet Diagonal Split */}
@@ -65,20 +67,25 @@ export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled 
             <stop offset="0%" stopColor="#10b981" />
             <stop offset="48%" stopColor="#10b981" />
             <stop offset="52%" stopColor="#a855f7" />
-            <stop offset="100%" stopColor="#7e22ce" />
+            <stop offset="100%" stopColor="#6b21a8" />
           </linearGradient>
 
-          {/* Soft Shadow Filter for White Knobs */}
-          <filter id={`shadow_${idSuffix}`} x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.25" />
+          {/* Shadow Filter for 3D depth */}
+          <filter id={`ballShadow_${idSuffix}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.35" />
+          </filter>
+
+          {/* Inner Disc Shadow */}
+          <filter id={`discShadow_${idSuffix}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000000" floodOpacity="0.2" />
           </filter>
         </defs>
 
-        {/* ── 1. MAIN COLORED SPHERE ─────────────────────────────────────── */}
+        {/* ── 1. MAIN 3D COLORED SPHERE ───────────────────────────────────── */}
         <circle
           cx="50"
           cy="50"
-          r="34"
+          r="47"
           fill={
             n === 0
               ? `url(#split0_${idSuffix})`
@@ -88,69 +95,37 @@ export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled 
               ? `url(#red_${idSuffix})`
               : `url(#green_${idSuffix})`
           }
+          filter={`url(#ballShadow_${idSuffix})`}
         />
 
-        {/* ── 2. 4 WHITE CIRCLES POPPING OUTSIDE THE BALL ────────────────── */}
-        {/* Top Circle */}
-        <circle
-          cx="50"
-          cy="16"
-          r="11"
-          fill="#e2e8f0"
-          fillOpacity="0.88"
-          stroke="#ffffff"
-          strokeWidth="1"
-          filter={`url(#shadow_${idSuffix})`}
-        />
-        {/* Bottom Circle */}
-        <circle
-          cx="50"
-          cy="84"
-          r="11"
-          fill="#e2e8f0"
-          fillOpacity="0.88"
-          stroke="#ffffff"
-          strokeWidth="1"
-          filter={`url(#shadow_${idSuffix})`}
-        />
-        {/* Left Circle */}
-        <circle
-          cx="16"
-          cy="50"
-          r="11"
-          fill="#e2e8f0"
-          fillOpacity="0.88"
-          stroke="#ffffff"
-          strokeWidth="1"
-          filter={`url(#shadow_${idSuffix})`}
-        />
-        {/* Right Circle */}
-        <circle
-          cx="84"
-          cy="50"
-          r="11"
-          fill="#e2e8f0"
-          fillOpacity="0.88"
-          stroke="#ffffff"
-          strokeWidth="1"
-          filter={`url(#shadow_${idSuffix})`}
-        />
-
-        {/* ── 3. INNER SOLID WHITE CIRCLE ────────────────────────────────── */}
-        <circle
-          cx="50"
-          cy="50"
-          r="23"
+        {/* ── 2. 3D SPECULAR GLOSS HIGHLIGHT ─────────────────────────────── */}
+        <ellipse
+          cx="42"
+          cy="32"
+          rx="22"
+          ry="14"
           fill="#ffffff"
-          filter={`url(#shadow_${idSuffix})`}
+          fillOpacity="0.25"
+          transform="rotate(-18 42 32)"
         />
 
-        {/* ── 4. CENTER NUMBER ───────────────────────────────────────────── */}
+        {/* ── 3. INNER SOLID WHITE CIRCLE DISC ───────────────────────────── */}
+        <circle
+          cx="50"
+          cy="50"
+          r="28"
+          fill="#ffffff"
+          stroke="rgba(0, 0, 0, 0.08)"
+          strokeWidth="1.5"
+          filter={`url(#discShadow_${idSuffix})`}
+        />
+
+        {/* ── 4. BOLD HIGH-CONTRAST CENTER NUMBER ────────────────────────── */}
         <text
           x="50"
-          y="60"
+          y="63"
           textAnchor="middle"
-          fontSize="30"
+          fontSize="38"
           fontWeight="900"
           fontFamily="system-ui, -apple-system, sans-serif"
           fill={getNumberColor(n)}
@@ -161,3 +136,5 @@ export const WinGoBall = ({ num, size = 'md', className = '', onClick, disabled 
     </div>
   );
 };
+
+export default WinGoBall;

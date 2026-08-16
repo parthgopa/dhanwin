@@ -59,6 +59,8 @@ export const adminAPI = {
   getUsers: () => apiCall('/admin/users', 'GET'),
   getUserFinancialProfile: (userId) => apiCall(`/admin/user-financial-profile/${userId}`, 'GET'),
   toggleBlock: (userId) => apiCall('/admin/toggle-block', 'POST', { userId }),
+  toggleAccountExclusion: (userId) => apiCall(`/admin/users/${userId}/toggle-exclude`, 'POST'),
+  getLivePlayers: () => apiCall('/admin/live-players', 'GET'),
 };
 
 export const gameAPI = {

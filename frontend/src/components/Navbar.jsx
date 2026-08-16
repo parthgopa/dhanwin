@@ -15,14 +15,19 @@ export const Navbar = ({
   onOpenWithdraw,
   onOpenAuth,
   onOpenWalletDrawer,
+  mobileMenuOpen: externalMobileMenuOpen,
+  setMobileMenuOpen: externalSetMobileMenuOpen,
 }) => {
   const { user, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false);
+  const isMenuOpen = externalMobileMenuOpen !== undefined ? externalMobileMenuOpen : internalMobileMenuOpen;
+  const setMenuOpen = externalSetMobileMenuOpen !== undefined ? externalSetMobileMenuOpen : setInternalMobileMenuOpen;
+
   const balance = Number(user?.walletBalance ?? 0);
 
   const handleNavClick = (tab) => {
     setActiveTab(tab);
-    setMobileMenuOpen(false);
+    setMenuOpen(false);
   };
 
   return (
@@ -65,7 +70,7 @@ export const Navbar = ({
                   ₹
                 </div>
                 <span className="text-[11px] sm:text-xs font-mono font-extrabold text-white">
-                  ₹{Math.round(balance).toLocaleString('en-IN')}
+                  ₹{Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <button
                   onClick={(e) => {
@@ -112,14 +117,26 @@ export const Navbar = ({
               {user.role === 'ADMIN' && (
                 <button
                   onClick={() => handleNavClick('admin')}
-                  className="hidden sm:flex px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold items-center gap-1 shadow transition"
+                  className="hidden md:flex items-center gap-1.5 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 text-red-400 px-3 py-1.5 rounded-xl text-xs font-black shadow-lg transition"
                 >
                   <Shield className="w-3.5 h-3.5" />
-                  <span>Admin</span>
+                  <span>Admin Panel</span>
                 </button>
               )}
 
-              {/* Logout (Desktop) */}
+              {/* USER PROFILE PILL */}
+              <div
+                onClick={onOpenWalletDrawer}
+                title="Click to view Previous Deposits & Withdrawals"
+                className="hidden lg:flex items-center gap-2 bg-[#151a23] border border-[#232b3b] hover:border-purple-500/50 px-3 py-1.5 rounded-xl text-xs cursor-pointer transition"
+              >
+                <div className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold text-[10px]">
+                  {user.username?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span className="font-bold text-gray-200">{user.username}</span>
+              </div>
+
+              {/* LOGOUT BUTTON (DESKTOP) */}
               <button
                 onClick={logout}
                 title="Logout"
@@ -129,36 +146,44 @@ export const Navbar = ({
               </button>
             </>
           ) : (
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
-                onClick={onOpenAuth}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 text-black font-extrabold px-4 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
+                onClick={() => onOpenAuth('login')}
+                className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-extrabold text-white border border-purple-500/40 hover:border-amber-400 bg-white/5 hover:bg-white/10 transition active:scale-95 shadow"
               >
-                <UserIcon className="w-4 h-4" />
-                <span>Login / Register</span>
+                Login
+              </button>
+              <button
+                onClick={() => onOpenAuth('register')}
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs shadow-lg transition flex items-center gap-1 active:scale-95"
+              >
+                <UserIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span>Register</span>
               </button>
             </div>
           )}
 
-          {/* ── MOBILE RIGHT SIDEBAR TOGGLE BUTTON (Visible on < md screens) ── */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open Navigation Menu"
-            className="md:hidden p-2 rounded-xl bg-[#151a23] border border-[#232b3b] hover:border-amber-500/50 text-amber-400 flex items-center justify-center transition active:scale-95"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          {/* ── MOBILE RIGHT SIDEBAR TOGGLE BUTTON (Visible on < md screens ONLY WHEN LOGGED IN) ── */}
+          {user && (
+            <button
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open Navigation Menu"
+              className="md:hidden p-2 rounded-xl bg-[#151a23] border border-[#232b3b] hover:border-amber-500/50 text-amber-400 flex items-center justify-center transition active:scale-95"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
 
         </div>
       </div>
 
       {/* ── MOBILE RIGHT SIDEBAR DRAWER (PORTALED TO BODY TO PREVENT HEADER CLIPPING) ── */}
-      {mobileMenuOpen && typeof document !== 'undefined' && createPortal(
+      {isMenuOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 top-0 left-0 w-screen h-screen z-[99999] flex justify-end md:hidden animate-fadeIn">
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() => setMenuOpen(false)}
           />
 
           {/* Drawer Container (Full 100vh) */}
@@ -176,7 +201,7 @@ export const Navbar = ({
                 </div>
               </div>
               <button
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => setMenuOpen(false)}
                 className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition"
               >
                 <X className="w-5 h-5" />
@@ -184,7 +209,7 @@ export const Navbar = ({
             </div>
 
             {/* Content (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar pb-10">
               
               {/* User Balance Card (If Logged In) */}
               {user ? (
@@ -202,26 +227,26 @@ export const Navbar = ({
                   <div className="flex items-baseline justify-between">
                     <span className="text-[10px] text-gray-400 uppercase font-bold">Balance</span>
                     <span className="text-xl font-black font-mono text-emerald-400">
-                      ₹{Math.round(balance).toLocaleString('en-IN')}
+                      ₹{Number(balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <button
                       onClick={() => {
-                        setMobileMenuOpen(false);
+                        setMenuOpen(false);
                         onOpenDeposit();
                       }}
-                      className="py-2 px-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl flex items-center justify-center gap-1 shadow transition"
+                      className="py-2 px-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl flex items-center justify-center gap-1 shadow transition active:scale-95"
                     >
                       <PlusCircle className="w-3.5 h-3.5" />
                       <span>Deposit</span>
                     </button>
                     <button
                       onClick={() => {
-                        setMobileMenuOpen(false);
+                        setMenuOpen(false);
                         onOpenWithdraw();
                       }}
-                      className="py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1 shadow transition"
+                      className="py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1 shadow transition active:scale-95"
                     >
                       <ArrowUpRight className="w-3.5 h-3.5" />
                       <span>Withdraw</span>
@@ -229,16 +254,28 @@ export const Navbar = ({
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenAuth();
-                  }}
-                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-black text-xs rounded-2xl shadow-lg flex items-center justify-center gap-2"
-                >
-                  <UserIcon className="w-4 h-4" />
-                  <span>Login / Register</span>
-                </button>
+                /* Unauthenticated Separate Login and Register Buttons */
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenAuth('login');
+                    }}
+                    className="py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition active:scale-95"
+                  >
+                    <span>Login</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenAuth('register');
+                    }}
+                    className="py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-black font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition active:scale-95"
+                  >
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>Register</span>
+                  </button>
+                </div>
               )}
 
               {/* Navigation Menu */}
@@ -272,7 +309,7 @@ export const Navbar = ({
                   
                   <button
                     onClick={() => {
-                      setMobileMenuOpen(false);
+                      setMenuOpen(false);
                       onOpenWalletDrawer();
                     }}
                     className="w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center gap-2.5 text-gray-300 hover:bg-white/5 hover:text-white transition"
@@ -290,20 +327,32 @@ export const Navbar = ({
                       <span>Admin Management Portal</span>
                     </button>
                   )}
+
+                  {/* Inline Logout for Direct Accessibility */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      logout();
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl text-xs font-black flex items-center gap-2.5 text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition mt-2 active:scale-95"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout Account</span>
+                  </button>
                 </div>
               )}
 
             </div>
 
-            {/* Footer / Logout */}
+            {/* Sticky Drawer Footer with Logout for Instant Access */}
             {user && (
               <div className="p-4 border-t border-purple-500/20 bg-[#0e051f] shrink-0">
                 <button
                   onClick={() => {
-                    setMobileMenuOpen(false);
+                    setMenuOpen(false);
                     logout();
                   }}
-                  className="w-full py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-black flex items-center justify-center gap-2 transition"
+                  className="w-full py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-black flex items-center justify-center gap-2 transition active:scale-95 shadow-lg"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Logout</span>
@@ -319,4 +368,3 @@ export const Navbar = ({
     </header>
   );
 };
-

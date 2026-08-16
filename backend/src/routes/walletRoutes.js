@@ -6,9 +6,10 @@ import { WalletTransaction } from '../models/WalletTransaction.js';
 
 const router = express.Router();
 
-// ── MINIMUM LIMITS CONFIGURATION ────────────────────────────────────────────────
-const MIN_DEPOSIT_AMOUNT = 1;
-const MIN_WITHDRAWAL_AMOUNT = 110;
+// ── MINIMUM & MAXIMUM LIMITS CONFIGURATION ──────────────────────────────────────
+const MIN_DEPOSIT_AMOUNT = 100;
+const MIN_WITHDRAWAL_AMOUNT = 300;
+const MAX_WITHDRAWAL_AMOUNT = 5000;
 
 // 1. Initiate Deposit (Generate Dynamic UPI QR Code)
 router.post('/deposit/qr', verifyToken, async (req, res) => {
@@ -191,7 +192,7 @@ router.post('/webhook/bank-credit', async (req, res) => {
   }
 });
 
-// 3. Request Withdrawal (Min ₹110)
+// 3. Request Withdrawal (Min ₹500, Max ₹5000)
 router.post('/withdraw', verifyToken, async (req, res) => {
   try {
     const { amount, upiId, accountNumber, ifscCode, accountHolderName } = req.body;
@@ -199,6 +200,10 @@ router.post('/withdraw', verifyToken, async (req, res) => {
 
     if (!numAmount || numAmount < MIN_WITHDRAWAL_AMOUNT) {
       return res.status(400).json({ message: `Minimum withdrawal amount is ₹${MIN_WITHDRAWAL_AMOUNT}` });
+    }
+
+    if (numAmount > MAX_WITHDRAWAL_AMOUNT) {
+      return res.status(400).json({ message: `Maximum withdrawal amount is ₹${MAX_WITHDRAWAL_AMOUNT}` });
     }
 
     if (!upiId && (!accountNumber || !ifscCode)) {
@@ -220,6 +225,21 @@ router.post('/withdraw', verifyToken, async (req, res) => {
       return res.status(400).json({
         message: `Withdrawals are only allowed 24 hours after account creation. Please try again in ${hoursRemaining} hour${hoursRemaining > 1 ? 's' : ''}.`,
         hoursRemaining,
+      });
+    }
+
+    // Maximum 2 withdrawals per 24 hours (excluding rejected)
+    const twentyFourHoursAgo = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+    const dailyWithdrawalCount = await WalletTransaction.countDocuments({
+      userId: user._id,
+      type: 'WITHDRAWAL',
+      status: { $in: ['PENDING', 'APPROVED'] },
+      createdAt: { $gte: twentyFourHoursAgo },
+    });
+
+    if (dailyWithdrawalCount >= 2) {
+      return res.status(400).json({
+        message: 'Daily withdrawal limit reached. Maximum 2 withdrawals allowed per day. Please try again tomorrow.',
       });
     }
 

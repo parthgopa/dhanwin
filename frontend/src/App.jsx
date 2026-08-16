@@ -30,10 +30,22 @@ function MainApp() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState('login');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWalletDrawerOpen, setIsWalletDrawerOpen] = useState(false);
+
+  const handleOpenAuth = (param = 'login') => {
+    const mode = typeof param === 'string' ? param : (param?.mode || 'login');
+    setAuthInitialMode(mode);
+    setIsAuthOpen(true);
+  };
 
   // Sync window URL path when navigating
   const navigateTo = (tab) => {
+    if (tab === 'aviator' && activeTab !== 'aviator') {
+      window.location.href = '/game/aviator';
+      return;
+    }
     setActiveTab(tab);
     if (tab === 'aviator') window.history.pushState({}, '', '/game/aviator');
     else if (tab === 'chicken') window.history.pushState({}, '', '/game/chicken');
@@ -61,48 +73,73 @@ function MainApp() {
   const isAdminView = activeTab === 'admin' || activeTab === 'admin-login';
 
   return (
-    <div className="h-screen max-h-screen overflow-hidden flex flex-col bg-transparent text-white selection:bg-amber-500 selection:text-black font-sans">
+    <div className="min-h-screen bg-[#070210] text-gray-100 flex flex-col selection:bg-amber-500 selection:text-black font-sans">
       
-      {/* ── 1.5s MAX DEPOSIT SUCCESS POPUP (Floating Top Notification) ── */}
-      {depositPopup && (
-        <div className="fixed top-4 sm:top-6 left-1/2 -translate-x-1/2 z-[999999] pointer-events-none transition-all duration-300 transform scale-100 opacity-100">
-          <div className="bg-gradient-to-r from-[#072415]/95 via-[#0d3320]/95 to-[#072415]/95 border-2 border-emerald-400 rounded-2xl px-5 py-3 shadow-[0_0_35px_rgba(16,185,129,0.55)] backdrop-blur-xl flex items-center gap-3 text-white">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-black font-black shadow-lg shrink-0">
-              <CheckCircle2 className="w-6 h-6 text-black" />
+      {/* Real-time Global Toast Notification (Error / Success / Info) */}
+      {notification && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] pointer-events-none w-full max-w-[92vw] sm:max-w-md px-3 animate-fadeIn">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold backdrop-blur-xl ${
+              notification.type === 'error'
+                ? 'bg-[#1e070c]/95 border-red-500/80 text-red-100 shadow-red-950/50'
+                : notification.type === 'success'
+                ? 'bg-[#061e14]/95 border-emerald-500/80 text-emerald-100 shadow-emerald-950/50'
+                : 'bg-[#1f1505]/95 border-amber-500/80 text-amber-100 shadow-amber-950/50'
+            }`}
+          >
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                notification.type === 'error'
+                  ? 'bg-red-500/20 border-red-500/40 text-red-400'
+                  : notification.type === 'success'
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                  : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+              }`}
+            >
+              {notification.type === 'error' ? (
+                <AlertCircle className="w-5 h-5" />
+              ) : notification.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : (
+                <Info className="w-5 h-5" />
+              )}
             </div>
-            <div>
-              <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-400" />
-                <span>Deposit Approved</span>
+            <div className="flex-1 min-w-0">
+              <div
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  notification.type === 'error'
+                    ? 'text-red-400'
+                    : notification.type === 'success'
+                    ? 'text-emerald-400'
+                    : 'text-amber-400'
+                }`}
+              >
+                {notification.type === 'error' ? 'Notice' : notification.type === 'success' ? 'Success' : 'Notification'}
               </div>
-              <div className="text-sm sm:text-base font-black text-white font-mono">
-                +₹{depositPopup.amount} Added to your account!
+              <div className="text-white text-xs font-semibold leading-snug break-words">
+                {notification.message || notification.text}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── STANDARD TOAST NOTIFICATIONS ── */}
-      {notification && (
-        <div className="fixed bottom-5 right-5 z-[99999] max-w-sm pointer-events-none transition-all duration-300">
-          <div
-            className={`p-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-2.5 text-xs font-bold border ${
-              notification.type === 'error'
-                ? 'bg-red-950/90 border-red-500/50 text-red-200'
-                : notification.type === 'success'
-                  ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
-                  : 'bg-blue-950/90 border-blue-500/50 text-blue-200'
-            }`}
-          >
-            {notification.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            ) : notification.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <Info className="w-4 h-4 text-blue-400 shrink-0" />
-            )}
-            <span>{notification.message}</span>
+      {/* Instant User Deposit Success Notification Card */}
+      {depositPopup && (
+        <div
+          className={`fixed top-4 left-1/2 z-[99999] pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-sm font-bold
+            bg-emerald-950/95 border-emerald-500/60 text-emerald-300 backdrop-blur-lg
+            ${depositPopup.animClass}`}
+          style={{ transform: 'translateX(-50%)' }}
+        >
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 font-mono font-black text-base">
+            ✓
+          </div>
+          <div>
+            <div className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">Deposit Credited!</div>
+            <div className="text-white font-mono font-bold">
+              +₹{depositPopup.amount} Added to your account!
+            </div>
           </div>
         </div>
       )}
@@ -114,8 +151,10 @@ function MainApp() {
           setActiveTab={navigateTo}
           onOpenDeposit={() => setIsDepositOpen(true)}
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
-          onOpenAuth={() => setIsAuthOpen(true)}
+          onOpenAuth={handleOpenAuth}
           onOpenWalletDrawer={() => setIsWalletDrawerOpen(true)}
+          mobileMenuOpen={isMobileMenuOpen}
+          setMobileMenuOpen={setIsMobileMenuOpen}
         />
       )}
 
@@ -123,10 +162,10 @@ function MainApp() {
       <main
         className={`flex-1 w-full mx-auto ${
           isAdminView
-            ? 'overflow-hidden flex flex-col max-w-none p-0'
+            ? 'flex flex-col max-w-none p-0'
             : activeTab === 'aviator' || activeTab === 'chicken'
-              ? 'overflow-hidden flex flex-col max-w-7xl px-2 sm:px-4 pt-2 sm:pt-3'
-              : 'overflow-y-auto max-w-7xl p-2 sm:p-4 space-y-4'
+              ? 'flex flex-col max-w-7xl px-2 sm:px-4 pt-2 sm:pt-3'
+              : 'max-w-7xl p-2 sm:p-4 space-y-4'
         }`}
       >
         
@@ -135,7 +174,8 @@ function MainApp() {
           <HomePage
             onSelectGame={(game) => navigateTo(game)}
             onOpenDeposit={() => setIsDepositOpen(true)}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={handleOpenAuth}
+            onOpenSidebar={() => setIsMobileMenuOpen(true)}
           />
         )}
 
@@ -143,7 +183,7 @@ function MainApp() {
         {activeTab === 'aviator' && (
           <AviatorGame
             onOpenDeposit={() => setIsDepositOpen(true)}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={handleOpenAuth}
           />
         )}
 
@@ -151,7 +191,7 @@ function MainApp() {
         {activeTab === 'chicken' && (
           <ChickenRoadGame
             onOpenDeposit={() => setIsDepositOpen(true)}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={handleOpenAuth}
           />
         )}
 
@@ -159,7 +199,7 @@ function MainApp() {
         {activeTab === 'wingo' && (
           <WinGoGame
             onOpenDeposit={() => setIsDepositOpen(true)}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={handleOpenAuth}
           />
         )}
 
@@ -178,7 +218,7 @@ function MainApp() {
 
       </main>
 
-      {/* Modals & Drawers */}
+      {/* Global Modals */}
       <DepositModal
         isOpen={isDepositOpen}
         onClose={() => setIsDepositOpen(false)}
@@ -191,6 +231,7 @@ function MainApp() {
 
       <AuthModal
         isOpen={isAuthOpen}
+        initialMode={authInitialMode}
         onClose={() => setIsAuthOpen(false)}
       />
 

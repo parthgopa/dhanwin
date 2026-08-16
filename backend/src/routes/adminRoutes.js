@@ -6,17 +6,28 @@ import { GameSession } from '../models/GameSession.js';
 import { WinGoSession } from '../models/WinGoSession.js';
 import { WinGoBet } from '../models/WinGoBet.js';
 import { BetHistory } from '../models/BetHistory.js';
+import { getLivePlayersStats } from '../socket/gameSocket.js';
 import mongoose from 'mongoose';
 
 const router = express.Router();
 
 router.use(verifyToken, verifyAdmin);
 
+// 0. Live Players & Active Online Count API
+router.get('/live-players', async (req, res) => {
+  try {
+    const stats = getLivePlayersStats();
+    res.json({ success: true, ...stats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching live players', error: error.message });
+  }
+});
+
 // 1. Get Pending Transactions for Admin Dashboard
 router.get('/pending-transactions', async (req, res) => {
   try {
     const pendingTransactions = await WalletTransaction.find({ status: 'PENDING' })
-      .populate('userId', 'username phone walletBalance')
+      .populate('userId', 'username phone email walletBalance isExcludedFromStats')
       .sort({ createdAt: -1 });
 
     res.json({ pendingTransactions });
@@ -28,15 +39,21 @@ router.get('/pending-transactions', async (req, res) => {
 // 2. Get All Transactions
 router.get('/all-transactions', async (req, res) => {
   try {
-    const { status, type } = req.query;
+    const { status, type, excludeTest } = req.query;
     const filter = {};
     if (status) filter.status = status;
     if (type) filter.type = type;
 
+    if (excludeTest === 'true') {
+      const excludedUsers = await User.find({ isExcludedFromStats: true }).select('_id');
+      const excludedUserIds = excludedUsers.map(u => u._id);
+      filter.userId = { $nin: excludedUserIds };
+    }
+
     const transactions = await WalletTransaction.find(filter)
-      .populate('userId', 'username phone walletBalance')
+      .populate('userId', 'username phone email walletBalance isExcludedFromStats')
       .sort({ createdAt: -1 })
-      .limit(100);
+      .limit(150);
 
     res.json({ transactions });
   } catch (error) {
@@ -120,7 +137,6 @@ router.post('/process-transaction', async (req, res) => {
       io.emit(`balance_update_${targetUser._id}`, balancePayload);
       io.emit('global_balance_update', balancePayload);
 
-      // Notify Admin room & all admins that this transaction was processed
       io.to('admin_room').emit('admin:transaction_processed', {
         transactionId: transaction._id,
         action,
@@ -143,7 +159,7 @@ router.post('/process-transaction', async (req, res) => {
   }
 });
 
-// 4. Consolidated Multi-Game House Profit & Analytics API
+// 4. Consolidated Multi-Game House Profit & Analytics API (Excludes Selected Test Accounts)
 router.get('/consolidated-analytics', async (req, res) => {
   try {
     const {
@@ -184,7 +200,11 @@ router.get('/consolidated-analytics', async (req, res) => {
       createdAt: { $gte: startFilterDate, $lte: endFilterDate },
     };
 
-    // ── 1. WinGo Aggregation ────────────────────────────────────────────────
+    // ── Get Excluded (Test / Demo) Accounts ──────────────────────────────────
+    const excludedUsers = await User.find({ isExcludedFromStats: true }).select('_id username');
+    const excludedUserIds = excludedUsers.map(u => u._id);
+
+    // ── 1. WinGo Aggregation (Direct from Bets excluding Test Accounts) ──────
     let wingoStats = {
       game: 'WinGo',
       gameId: 'WINGO',
@@ -197,34 +217,37 @@ router.get('/consolidated-analytics', async (req, res) => {
     };
 
     if (game === 'ALL' || game === 'WINGO') {
-      const wingoAgg = await WinGoSession.aggregate([
-        { $match: { createdAt: dateFilter.createdAt, status: 'COMPLETED' } },
+      const wingoBetAgg = await WinGoBet.aggregate([
+        { $match: { createdAt: dateFilter.createdAt, userId: { $nin: excludedUserIds } } },
         {
           $group: {
             _id: null,
-            turnover: { $sum: '$totalPool' },
-            payouts: { $sum: '$totalPayout' },
-            houseProfit: { $sum: '$netHouseProfit' },
-            totalBets: { $sum: '$totalBetsCount' },
-            totalRounds: { $sum: 1 },
+            turnover: { $sum: '$totalAmount' },
+            payouts: { $sum: { $cond: [{ $eq: ['$status', 'WON'] }, '$payoutAmount', 0] } },
+            totalBets: { $sum: 1 },
           },
         },
       ]);
 
-      if (wingoAgg[0]) {
-        const w = wingoAgg[0];
-        wingoStats.turnover = w.turnover || 0;
-        wingoStats.payouts = w.payouts || 0;
-        wingoStats.houseProfit = w.houseProfit || (w.turnover - w.payouts);
+      const wingoRoundsCount = await WinGoSession.countDocuments({
+        createdAt: dateFilter.createdAt,
+        status: 'COMPLETED',
+      });
+
+      if (wingoBetAgg[0]) {
+        const w = wingoBetAgg[0];
+        wingoStats.turnover = Math.round(w.turnover || 0);
+        wingoStats.payouts = Math.round(w.payouts || 0);
+        wingoStats.houseProfit = wingoStats.turnover - wingoStats.payouts;
         wingoStats.totalBets = w.totalBets || 0;
-        wingoStats.totalRounds = w.totalRounds || 0;
-        wingoStats.marginPercent = w.turnover > 0
-          ? Number(((wingoStats.houseProfit / w.turnover) * 100).toFixed(2))
+        wingoStats.totalRounds = wingoRoundsCount || 0;
+        wingoStats.marginPercent = wingoStats.turnover > 0
+          ? Number(((wingoStats.houseProfit / wingoStats.turnover) * 100).toFixed(2))
           : 0;
       }
     }
 
-    // ── 2. Aviator Aggregation ──────────────────────────────────────────────
+    // ── 2. Aviator Aggregation (Direct from Bets excluding Test Accounts) ────
     let aviatorStats = {
       game: 'Aviator',
       gameId: 'AVIATOR',
@@ -237,28 +260,39 @@ router.get('/consolidated-analytics', async (req, res) => {
     };
 
     if (game === 'ALL' || game === 'AVIATOR') {
-      const aviatorAgg = await GameSession.aggregate([
-        { $match: { gameType: 'AVIATOR', createdAt: dateFilter.createdAt, status: 'CRASHED' } },
+      const aviatorBetAgg = await BetHistory.aggregate([
+        {
+          $match: {
+            gameType: 'AVIATOR',
+            createdAt: dateFilter.createdAt,
+            userId: { $nin: excludedUserIds },
+          },
+        },
         {
           $group: {
             _id: null,
-            turnover: { $sum: '$totalBetsVolume' },
-            payouts: { $sum: '$totalPayoutsVolume' },
-            totalBets: { $sum: '$totalBetsCount' },
-            totalRounds: { $sum: 1 },
+            turnover: { $sum: '$betAmount' },
+            payouts: { $sum: { $cond: [{ $eq: ['$status', 'CASHOUT'] }, '$payoutAmount', 0] } },
+            totalBets: { $sum: 1 },
           },
         },
       ]);
 
-      if (aviatorAgg[0]) {
-        const a = aviatorAgg[0];
-        aviatorStats.turnover = a.turnover || 0;
-        aviatorStats.payouts = a.payouts || 0;
-        aviatorStats.houseProfit = (a.turnover || 0) - (a.payouts || 0);
+      const aviatorRoundsCount = await GameSession.countDocuments({
+        gameType: 'AVIATOR',
+        createdAt: dateFilter.createdAt,
+        status: 'CRASHED',
+      });
+
+      if (aviatorBetAgg[0]) {
+        const a = aviatorBetAgg[0];
+        aviatorStats.turnover = Math.round(a.turnover || 0);
+        aviatorStats.payouts = Math.round(a.payouts || 0);
+        aviatorStats.houseProfit = aviatorStats.turnover - aviatorStats.payouts;
         aviatorStats.totalBets = a.totalBets || 0;
-        aviatorStats.totalRounds = a.totalRounds || 0;
-        aviatorStats.marginPercent = a.turnover > 0
-          ? Number(((aviatorStats.houseProfit / a.turnover) * 100).toFixed(2))
+        aviatorStats.totalRounds = aviatorRoundsCount || 0;
+        aviatorStats.marginPercent = aviatorStats.turnover > 0
+          ? Number(((aviatorStats.houseProfit / aviatorStats.turnover) * 100).toFixed(2))
           : 0;
       }
     }
@@ -276,28 +310,33 @@ router.get('/consolidated-analytics', async (req, res) => {
     };
 
     if (game === 'ALL' || game === 'CHICKEN_ROAD' || game === 'CHICKEN') {
-      const chickenAgg = await GameSession.aggregate([
-        { $match: { gameType: 'CHICKEN_ROAD', createdAt: dateFilter.createdAt } },
+      const chickenBetAgg = await BetHistory.aggregate([
+        {
+          $match: {
+            gameType: 'CHICKEN_ROAD',
+            createdAt: dateFilter.createdAt,
+            userId: { $nin: excludedUserIds },
+          },
+        },
         {
           $group: {
             _id: null,
-            turnover: { $sum: '$totalBetsVolume' },
-            payouts: { $sum: '$totalPayoutsVolume' },
-            totalBets: { $sum: '$totalBetsCount' },
-            totalRounds: { $sum: 1 },
+            turnover: { $sum: '$betAmount' },
+            payouts: { $sum: { $cond: [{ $eq: ['$status', 'CASHOUT'] }, '$payoutAmount', 0] } },
+            totalBets: { $sum: 1 },
           },
         },
       ]);
 
-      if (chickenAgg[0]) {
-        const c = chickenAgg[0];
-        chickenStats.turnover = c.turnover || 0;
-        chickenStats.payouts = c.payouts || 0;
-        chickenStats.houseProfit = (c.turnover || 0) - (c.payouts || 0);
+      if (chickenBetAgg[0]) {
+        const c = chickenBetAgg[0];
+        chickenStats.turnover = Math.round(c.turnover || 0);
+        chickenStats.payouts = Math.round(c.payouts || 0);
+        chickenStats.houseProfit = chickenStats.turnover - chickenStats.payouts;
         chickenStats.totalBets = c.totalBets || 0;
-        chickenStats.totalRounds = c.totalRounds || 0;
-        chickenStats.marginPercent = c.turnover > 0
-          ? Number(((chickenStats.houseProfit / c.turnover) * 100).toFixed(2))
+        chickenStats.totalRounds = 0;
+        chickenStats.marginPercent = chickenStats.turnover > 0
+          ? Number(((chickenStats.houseProfit / chickenStats.turnover) * 100).toFixed(2))
           : 0;
       }
     }
@@ -360,6 +399,7 @@ router.get('/consolidated-analytics', async (req, res) => {
         range,
         startDate: startFilterDate,
         endDate: endFilterDate,
+        excludedAccountsCount: excludedUserIds.length,
       },
       summary: {
         totalTurnover,
@@ -369,11 +409,55 @@ router.get('/consolidated-analytics', async (req, res) => {
         totalBets,
         totalRounds,
       },
+      excludedStats: {
+        excludedAccountsCount: excludedUserIds.length,
+        excludedAccounts: excludedUsers.map(u => ({ id: u._id, username: u.username })),
+      },
       gameBreakdown,
       auditFeed,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching consolidated analytics', error: error.message });
+  }
+});
+
+// 5. List All Platform Users with Exclusion Status
+router.get('/users', async (req, res) => {
+  try {
+    const users = await User.find().select('-passwordHash').sort({ createdAt: -1 });
+    res.json({ users });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users', error: error.message });
+  }
+});
+
+// 6. Toggle Exclude Account from Stats & Profits
+router.post('/users/:userId/toggle-exclude', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    user.isExcludedFromStats = !user.isExcludedFromStats;
+    await user.save();
+
+    res.json({
+      success: true,
+      isExcludedFromStats: user.isExcludedFromStats,
+      message: `Account "${user.username}" is now ${user.isExcludedFromStats ? 'EXCLUDED from stats & profits' : 'INCLUDED in stats & profits'}`,
+      user: {
+        _id: user._id,
+        username: user.username,
+        phone: user.phone,
+        email: user.email,
+        walletBalance: user.walletBalance,
+        isBlocked: user.isBlocked,
+        isExcludedFromStats: user.isExcludedFromStats,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating exclusion status', error: error.message });
   }
 });
 

@@ -3,8 +3,9 @@ import { X, Landmark, Clock, ArrowRight, CheckCircle2, AlertTriangle, RefreshCw 
 import { walletAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-// ── MINIMUM WITHDRAWAL AMOUNT CONFIGURATION ──────────────────────────────────────
-export const MIN_WITHDRAWAL_AMOUNT = 110;
+// ── WITHDRAWAL AMOUNT LIMITS CONFIGURATION ──────────────────────────────────────
+export const MIN_WITHDRAWAL_AMOUNT = 300;
+export const MAX_WITHDRAWAL_AMOUNT = 5000;
 
 export const WithdrawModal = ({ isOpen, onClose }) => {
   const { user, updateBalance, showToast } = useAuth();
@@ -24,6 +25,11 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
     const numAmount = Number(amount);
     if (!numAmount || numAmount < MIN_WITHDRAWAL_AMOUNT) {
       showToast(`Minimum withdrawal amount is ₹${MIN_WITHDRAWAL_AMOUNT}`, 'error');
+      return;
+    }
+
+    if (numAmount > MAX_WITHDRAWAL_AMOUNT) {
+      showToast(`Maximum withdrawal amount is ₹${MAX_WITHDRAWAL_AMOUNT}`, 'error');
       return;
     }
 
@@ -83,7 +89,7 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-white font-sans">Withdraw Funds</h3>
-              <p className="text-xs text-gray-400">Min ₹{MIN_WITHDRAWAL_AMOUNT} | Fast Payout System</p>
+              <p className="text-xs text-gray-400">Min ₹{MIN_WITHDRAWAL_AMOUNT} | Max ₹{MAX_WITHDRAWAL_AMOUNT.toLocaleString('en-IN')} | Fast Payout</p>
             </div>
           </div>
           <button onClick={resetModal} className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition">
@@ -94,11 +100,12 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
         {!submitted ? (() => {
           const numAmount = Number(amount);
           const isMinValid = amount !== '' && numAmount >= MIN_WITHDRAWAL_AMOUNT;
+          const isMaxValid = amount !== '' && numAmount <= MAX_WITHDRAWAL_AMOUNT;
           const isBalanceSufficient = user ? user.walletBalance >= numAmount : false;
           const accountAgeMs = user?.createdAt ? Date.now() - new Date(user.createdAt).getTime() : Infinity;
           const isAccount24hOld = accountAgeMs >= 24 * 60 * 60 * 1000;
           const hoursRemaining = !isAccount24hOld ? Math.ceil((24 * 60 * 60 * 1000 - accountAgeMs) / (60 * 60 * 1000)) : 0;
-          const isAmountValid = isMinValid && isBalanceSufficient && isAccount24hOld;
+          const isAmountValid = isMinValid && isMaxValid && isBalanceSufficient && isAccount24hOld;
 
           return (
             <form onSubmit={handleSubmitWithdrawal} className="space-y-4">
@@ -122,7 +129,9 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
 
               {/* Amount Input */}
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">Withdrawal Amount (Min ₹{MIN_WITHDRAWAL_AMOUNT})</label>
+                <label className="block text-xs font-semibold text-gray-400 mb-1">
+                  Withdrawal Amount (Min ₹{MIN_WITHDRAWAL_AMOUNT} - Max ₹{MAX_WITHDRAWAL_AMOUNT.toLocaleString('en-IN')})
+                </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold text-lg">₹</span>
                   <input
@@ -152,7 +161,13 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
                     <span>Minimum withdrawal amount is ₹{MIN_WITHDRAWAL_AMOUNT}</span>
                   </div>
                 )}
-                {amount !== '' && isMinValid && !isBalanceSufficient && (
+                {amount !== '' && isMinValid && !isMaxValid && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-400 font-bold animate-fadeIn">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Maximum withdrawal amount is ₹{MAX_WITHDRAWAL_AMOUNT.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                {amount !== '' && isMinValid && isMaxValid && !isBalanceSufficient && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-400 font-bold animate-fadeIn">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Insufficient balance (Available: ₹{user?.walletBalance || 0})</span>
@@ -248,6 +263,8 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
                         ? `Withdrawals Unlock in ${hoursRemaining}h (24h Lock)`
                         : !isMinValid
                         ? `Enter min ₹${MIN_WITHDRAWAL_AMOUNT} to withdraw`
+                        : !isMaxValid
+                        ? `Max withdrawal is ₹${MAX_WITHDRAWAL_AMOUNT.toLocaleString('en-IN')}`
                         : !isBalanceSufficient
                           ? 'Insufficient Balance'
                           : `Request Withdrawal (₹${numAmount})`}

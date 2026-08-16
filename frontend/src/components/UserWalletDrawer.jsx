@@ -95,7 +95,7 @@ export const UserWalletDrawer = ({
           </div>
 
           <div className="text-3xl font-black font-mono text-emerald-400 tracking-tight">
-            ₹{Math.round(user?.walletBalance || 0).toLocaleString('en-IN')}
+            ₹{Number(user?.walletBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-1">
@@ -118,7 +118,7 @@ export const UserWalletDrawer = ({
               className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 active:scale-95"
             >
               <ArrowUpRight className="w-4 h-4" />
-              <span>Withdraw (Min ₹500)</span>
+              <span>Withdraw (₹300 - ₹5,000)</span>
             </button>
           </div>
         </div>

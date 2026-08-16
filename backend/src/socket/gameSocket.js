@@ -53,6 +53,46 @@ function buildSimulatedBets() {
   return [];
 }
 
+// --- LIVE PLAYERS TRACKING REGISTRY ---
+export const activeLiveSockets = new Map();
+
+export const getLivePlayersStats = () => {
+  const uniqueUsers = new Map();
+  let aviatorCount = 0;
+  let wingoCount = 0;
+
+  activeLiveSockets.forEach((s) => {
+    const key = s.userId ? s.userId.toString() : s.socketId;
+    if (!uniqueUsers.has(key)) {
+      uniqueUsers.set(key, s);
+    }
+    if (s.game === 'AVIATOR') aviatorCount++;
+    if (s.game === 'WINGO') wingoCount++;
+  });
+
+  return {
+    totalOnline: uniqueUsers.size,
+    aviatorPlayers: aviatorCount,
+    wingoPlayers: wingoCount,
+    liveUsers: Array.from(uniqueUsers.values()).map((u) => ({
+      socketId: u.socketId,
+      userId: u.userId,
+      username: u.username || 'Guest',
+      phone: u.phone || '',
+      email: u.email || '',
+      game: u.game || 'LOBBY',
+      connectedAt: u.connectedAt,
+    })),
+  };
+};
+
+export const broadcastLivePlayersCount = (io) => {
+  if (!io) return;
+  const stats = getLivePlayersStats();
+  io.to('admin_room').emit('admin:live_players_count', stats);
+  io.emit('admin:live_players_count', stats);
+};
+
 export const initGameSockets = (server) => {
   const io = new Server(server, {
     cors: {
@@ -94,6 +134,18 @@ export const initGameSockets = (server) => {
   startWinGoEngine(io);
 
   io.on('connection', (socket) => {
+    // Register active socket connection
+    activeLiveSockets.set(socket.id, {
+      socketId: socket.id,
+      userId: socket.user?._id?.toString() || null,
+      username: socket.user?.username || 'Guest',
+      phone: socket.user?.phone || '',
+      email: socket.user?.email || '',
+      game: 'LOBBY',
+      connectedAt: new Date(),
+    });
+    broadcastLivePlayersCount(io);
+
     // WinGo Handlers
     initWinGoSocketHandlers(io, socket);
 
@@ -111,29 +163,68 @@ export const initGameSockets = (server) => {
       if (uid) {
         socket.join(`user_${uid}`);
         socket.join(uid.toString());
+        const entry = activeLiveSockets.get(socket.id);
+        if (entry) {
+          entry.userId = uid.toString();
+          if (data?.username) entry.username = data.username;
+        }
+        broadcastLivePlayersCount(io);
+      }
+    });
+
+    // Game Room Location Tracking
+    socket.on('game:enter', (data) => {
+      const gameType = data?.game; // 'AVIATOR' | 'WINGO' | 'LOBBY'
+      const entry = activeLiveSockets.get(socket.id);
+      if (entry && gameType) {
+        entry.game = gameType.toUpperCase();
+        broadcastLivePlayersCount(io);
       }
     });
 
     // Client State Sync
-    socket.emit('aviator:state_sync', {
-      gameId: aviatorState.gameId,
-      status: aviatorState.status,
-      serverSeedHash: aviatorState.serverSeedHash,
-      currentMultiplier: aviatorState.currentMultiplier,
-      countdownSec: aviatorState.countdownSec,
-      history: aviatorState.history,
-      simulatedBets: aviatorState.simulatedBets,
-      totalWinINR: aviatorState.totalWinINR,
-      activeBetsCount: aviatorState.activeBetsThisRound,
-      totalBetsCount: aviatorState.totalBetsThisRound,
-    });
+    const sendAviatorStateSync = () => {
+      const entry = activeLiveSockets.get(socket.id);
+      if (entry) {
+        entry.game = 'AVIATOR';
+        broadcastLivePlayersCount(io);
+      }
+
+      socket.emit('aviator:state_sync', {
+        gameId: aviatorState.gameId,
+        status: aviatorState.status,
+        serverSeedHash: aviatorState.serverSeedHash,
+        currentMultiplier: aviatorState.currentMultiplier,
+        countdownSec: aviatorState.countdownSec,
+        history: aviatorState.history,
+        simulatedBets: aviatorState.simulatedBets,
+        totalWinINR: aviatorState.totalWinINR,
+        activeBetsCount: aviatorState.activeBetsThisRound,
+        totalBetsCount: aviatorState.totalBetsThisRound,
+      });
+    };
+
+    sendAviatorStateSync();
+    socket.on('aviator:request_sync', sendAviatorStateSync);
 
     // ADMIN EVENTS & TELEMETRY STREAM
     socket.on('admin:join_room', () => {
       if (socket.user && socket.user.role === 'ADMIN') {
         socket.join('admin_room');
         emitAdminTelemetry(io);
+        socket.emit('admin:live_players_count', getLivePlayersStats());
       }
+    });
+
+    socket.on('admin:get_live_players', () => {
+      if (socket.user && socket.user.role === 'ADMIN') {
+        socket.emit('admin:live_players_count', getLivePlayersStats());
+      }
+    });
+
+    socket.on('disconnect', () => {
+      activeLiveSockets.delete(socket.id);
+      broadcastLivePlayersCount(io);
     });
 
     socket.on('admin:set_control_mode', (data) => {
@@ -171,7 +262,15 @@ export const initGameSockets = (server) => {
         if (!betAmount || betAmount < 1) return socket.emit('aviator:error', { message: 'Minimum bet is ₹1' });
 
         const user = await User.findById(socket.user._id);
-        if (!user || user.walletBalance < betAmount) {
+        if (!user) {
+          return socket.emit('aviator:error', { message: 'User account not found' });
+        }
+
+        if (user.isBlocked) {
+          return socket.emit('aviator:error', { message: 'Your account is blocked. You cannot place bets.' });
+        }
+
+        if (user.walletBalance < betAmount) {
           return socket.emit('aviator:error', { message: 'Insufficient balance' });
         }
 
@@ -525,53 +624,55 @@ const startAviatorLoop = (io) => {
         clearInterval(aviatorTimer);
         aviatorState.currentMultiplier = aviatorState.crashPoint;
         await triggerCrash();
-        aviatorState.currentMultiplier = current;
-        io.emit('aviator:tick', { multiplier: current });
+        return;
+      }
 
-        // Real Users Auto Cashouts
-        for (const bet of aviatorState.bets) {
-          if (bet.status === 'PLACED' && bet.autoCashOut && current >= bet.autoCashOut) {
-            bet.status = 'CASHOUT';
-            bet.cashOutMultiplier = current;
-            const payoutAmount = Math.floor(bet.betAmount * current * 100) / 100;
-            bet.payoutAmount = payoutAmount;
-            aviatorState.totalWinINR += payoutAmount;
+      aviatorState.currentMultiplier = current;
+      io.emit('aviator:tick', { multiplier: current });
 
-            // Decrement active bets counter for real user cashout
-            aviatorState.activeBetsThisRound = Math.max(0, aviatorState.activeBetsThisRound - 1);
+      // Real Users Auto Cashouts
+      for (const bet of aviatorState.bets) {
+        if (bet.status === 'PLACED' && bet.autoCashOut && current >= bet.autoCashOut) {
+          bet.status = 'CASHOUT';
+          bet.cashOutMultiplier = current;
+          const payoutAmount = Math.floor(bet.betAmount * current * 100) / 100;
+          bet.payoutAmount = payoutAmount;
+          aviatorState.totalWinINR += payoutAmount;
 
-            const user = await User.findById(bet.userId);
-            if (user) {
-              user.walletBalance += payoutAmount;
-              await user.save();
+          // Decrement active bets counter for real user cashout
+          aviatorState.activeBetsThisRound = Math.max(0, aviatorState.activeBetsThisRound - 1);
 
-              await BetHistory.findByIdAndUpdate(bet.betId, {
-                status: 'CASHOUT',
-                cashOutMultiplier: current,
-                payoutAmount,
-              });
+          const user = await User.findById(bet.userId);
+          if (user) {
+            user.walletBalance += payoutAmount;
+            await user.save();
 
-              io.to(`user_${bet.userId}`).emit('balance_update', { newBalance: user.walletBalance });
-              io.to(`user_${bet.userId}`).emit('aviator:cashout_success', {
-                cashOutMultiplier: current,
-                payoutAmount,
-                newBalance: user.walletBalance,
-              });
+            await BetHistory.findByIdAndUpdate(bet.betId, {
+              status: 'CASHOUT',
+              cashOutMultiplier: current,
+              payoutAmount,
+            });
 
-              io.emit('aviator:player_cashed_out', {
-                username: user.username,
-                cashOutMultiplier: current,
-                payoutAmount,
-                totalWinINR: aviatorState.totalWinINR,
-                activeBetsCount: aviatorState.activeBetsThisRound,
-                totalBetsCount: aviatorState.totalBetsThisRound,
-              });
-            }
+            io.to(`user_${bet.userId}`).emit('balance_update', { newBalance: user.walletBalance });
+            io.to(`user_${bet.userId}`).emit('aviator:cashout_success', {
+              cashOutMultiplier: current,
+              payoutAmount,
+              newBalance: user.walletBalance,
+            });
+
+            io.emit('aviator:player_cashed_out', {
+              username: user.username,
+              cashOutMultiplier: current,
+              payoutAmount,
+              totalWinINR: aviatorState.totalWinINR,
+              activeBetsCount: aviatorState.activeBetsThisRound,
+              totalBetsCount: aviatorState.totalBetsThisRound,
+            });
           }
         }
-
-        emitAdminTelemetry(io);
       }
+
+      emitAdminTelemetry(io);
     }, 50);
   };
 

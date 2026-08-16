@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Flame, ShieldCheck, Plus, Minus, X, History, Lock, Wifi } from 'lucide-react';
-import { getSocket } from '../services/socket';
+import { getSocket, forceFreshConnection } from '../services/socket';
 import { useAuth } from '../context/AuthContext';
+import { GameConnectionWatchdog } from './common/GameConnectionWatchdog';
 
 // ─── SVG ray sprite drawn once ─────────────────────────────────────────────
 const RAY_COUNT = 20;
@@ -16,6 +17,7 @@ const RAY_SVG = (() => {
 
 export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
   const { user, updateBalance, showToast } = useAuth();
+  const [lastEventTime, setLastEventTime] = useState(Date.now());
 
   // Loading screen
   const [isConnecting, setIsConnecting] = useState(true);
@@ -135,8 +137,11 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
   // ── WebSocket listener setup ────────────────────────────────────────────
   useEffect(() => {
     if (isConnecting) return;
-    const socket = getSocket();
+    const socket = forceFreshConnection();
     socketRef.current = socket;
+
+    // Immediately request active round state sync from backend
+    socket.emit('aviator:request_sync');
 
     socket.on('aviator:state_sync', (data) => {
       setGameState(data.status);
@@ -148,6 +153,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.totalWinINR !== undefined) setTotalWinINR(data.totalWinINR);
       if (data.activeBetsCount) setActiveBetsCount(data.activeBetsCount);
       if (data.totalBetsCount) setTotalBetsCount(data.totalBetsCount);
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:round_preparing', (data) => {
@@ -167,6 +173,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.simulatedBets) setSimulatedBets(data.simulatedBets);
       if (data.activeBetsCount !== undefined) setActiveBetsCount(data.activeBetsCount);
       if (data.totalBetsCount !== undefined) setTotalBetsCount(data.totalBetsCount);
+      setLastEventTime(Date.now());
 
       if (user) {
         // Auto-fire queued bets first
@@ -197,17 +204,21 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       }
     });
 
-    socket.on('aviator:countdown_tick', (data) => setCountdown(data.countdownSec));
+    socket.on('aviator:countdown_tick', (data) => {
+      setCountdown(data.countdownSec);
+      setLastEventTime(Date.now());
+    });
 
     socket.on('aviator:round_started', () => {
       setGameState('RUNNING');
       startTimeRef.current = Date.now();
-
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:tick', (data) => {
       const cur = data.multiplier;
       setMultiplier(cur);
+      setLastEventTime(Date.now());
       if (hasBet1Ref.current && autoCashOut1EnabledRef.current && cur >= Number(autoCashOut1MultRef.current)) {
         hasBet1Ref.current = false;
         socket.emit('aviator:cashout');
@@ -224,6 +235,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       hasBet1Ref.current = true;
       setHasBet1(true);
       showBetToast(panel, bet1AmountRef.current);
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:cashout_success', (data) => {
@@ -231,6 +243,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       setCashoutDetails1(data);
       updateBalance(data.newBalance);
       showToast(`Cashed out at ${data.cashOutMultiplier}x! Won ₹${data.payoutAmount}`, 'success');
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:player_cashed_out', (data) => {
@@ -239,12 +252,14 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       // Server-authoritative counts — decrement happens on server, we just mirror it
       if (data.activeBetsCount !== undefined) setActiveBetsCount(data.activeBetsCount);
       if (data.totalBetsCount !== undefined) setTotalBetsCount(data.totalBetsCount);
+      setLastEventTime(Date.now());
     });
 
     // Also handle bets_update (when a real user joins a round)
     socket.on('aviator:bets_update', (data) => {
       if (data.activeBetsCount !== undefined) setActiveBetsCount(data.activeBetsCount);
       if (data.totalBetsCount !== undefined) setTotalBetsCount(data.totalBetsCount);
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:crashed', (data) => {
@@ -254,6 +269,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.history) setHistory(data.history);
       hasBet1Ref.current = false;
       hasBet2Ref.current = false;
+      setLastEventTime(Date.now());
     });
 
     socket.on('aviator:error', (data) => showToast(data.message, 'error'));
@@ -263,8 +279,6 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
         'aviator:round_started', 'aviator:tick', 'aviator:bet_success',
         'aviator:cashout_success', 'aviator:player_cashed_out', 'aviator:crashed',
         'aviator:bets_update', 'aviator:error'].forEach(ev => socket.off(ev));
-      socket.disconnect();
-
     };
   }, [isConnecting]);
 
@@ -390,6 +404,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
   // ── Bet handlers ────────────────────────────────────────────────────────
   const handlePlaceBet1 = () => {
     if (!user) { onOpenAuth(); return; }
+    if (user.isBlocked) { showToast('Your account is blocked. You cannot place bets.', 'error'); return; }
     if (bet1Amount < MIN_BET) { showToast(`Minimum bet is ₹${MIN_BET}`, 'error'); setBet1Amount(MIN_BET); return; }
     const clampedBet1 = Math.min(bet1Amount, MAX_BET);
     if (bet1Amount > MAX_BET) setBet1Amount(MAX_BET);
@@ -419,6 +434,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
 
   const handlePlaceBet2 = () => {
     if (!user) { onOpenAuth(); return; }
+    if (user.isBlocked) { showToast('Your account is blocked. You cannot place bets.', 'error'); return; }
     if (bet2Amount < MIN_BET) { showToast(`Minimum bet is ₹${MIN_BET}`, 'error'); setBet2Amount(MIN_BET); return; }
     const clampedBet2 = Math.min(bet2Amount, MAX_BET);
     if (bet2Amount > MAX_BET) setBet2Amount(MAX_BET);
@@ -485,6 +501,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
     if (isQueued1) return 'CANCEL_QUEUED'; // queued for next round
     if (gameState === 'RUNNING' && !hasBet1) return 'WAITING';
     if (hasBet1 && !isCashedOut1) return 'BET_PENDING';
+    if (gameState === 'CRASHED' || gameState !== 'BETTING') return 'WAITING';
     return 'BET';
   };
 
@@ -493,6 +510,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
     if (isQueued2) return 'CANCEL_QUEUED';
     if (gameState === 'RUNNING' && !hasBet2) return 'WAITING';
     if (hasBet2 && !isCashedOut2) return 'BET_PENDING';
+    if (gameState === 'CRASHED' || gameState !== 'BETTING') return 'WAITING';
     return 'BET';
   };
 
@@ -557,7 +575,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
   };
 
   return (
-    <div className="w-full space-y-2 font-sans flex flex-col relative" style={{ height: 'calc(100vh - 72px)', minHeight: 480 }}>
+    <div className="w-full space-y-2 font-sans flex flex-col relative pb-28 lg:pb-0 lg:h-[calc(100vh-72px)] min-h-0">
 
 
       {/* Bug 3: Bet Placed Toast — centered above canvas */}
@@ -664,8 +682,8 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
 
           {/* Bug 2 + Bug 4: GAME STAGE — full height, animated background */}
           <div
-            className="aviator-bg border border-red-900/30 rounded-2xl relative overflow-hidden flex-1 min-h-0 shadow-2xl"
-            style={{ minHeight: 220 }}
+            className="aviator-bg border border-red-900/30 rounded-2xl relative overflow-hidden h-[215px] sm:h-[250px] lg:h-auto lg:flex-1 lg:min-h-0 shadow-2xl shrink-0 lg:shrink"
+            style={{ minHeight: 180 }}
           >
             {/* Bug 4: Rotating ray background */}
             <div className="ray-container" style={{ borderRadius: 'inherit' }}>
@@ -725,7 +743,7 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
 
               {gameState === 'CRASHED' && (
                 <div className="text-center space-y-1">
-                  <div className="text-red-500 text-xl font-black uppercase tracking-widest animate-bounce">FLEW AWAY!</div>
+                  <div className="text-white text-xl font-black uppercase tracking-widest animate-bounce drop-shadow-[0_2px_12px_rgba(255,255,255,0.3)]">FLEW AWAY!</div>
                   <div
                     className="font-black text-red-500 font-mono"
                     style={{ fontSize: 'clamp(3rem, 10vw, 5.5rem)' }}
@@ -869,6 +887,19 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
           </div>
         </div>
       )}
+
+      {/* ── CONNECTION & BACKGROUND RESILIENCE WATCHDOG ─────────────────────── */}
+      <GameConnectionWatchdog
+        gameName="Aviator"
+        lastEventTimestamp={lastEventTime}
+        onReconnect={() => {
+          const socket = getSocket();
+          if (socket) {
+            socket.emit('aviator:request_sync');
+          }
+          setLastEventTime(Date.now());
+        }}
+      />
 
     </div>
   );

@@ -115,49 +115,54 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
       {/* ── TAB 1: GAME HISTORY TABLE (10 PER PAGE, MAX 10 PAGES) ─────────── */}
       {activeTab === 'GAME_HISTORY' && (
         <div className="space-y-3">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left text-xs font-mono">
               <thead>
-                <tr className="bg-[#fcd34d] text-black uppercase font-black text-[11px] rounded-xl">
-                  <th className="p-3 rounded-l-xl">Period</th>
-                  <th className="p-3 text-center">Number</th>
-                  <th className="p-3 text-center">Big/Small</th>
-                  <th className="p-3 text-center rounded-r-xl">Color</th>
+                <tr className="bg-[#fcd34d] text-black uppercase font-black text-[10px] sm:text-[11px] rounded-xl">
+                  <th className="py-2.5 px-2 sm:p-3 rounded-l-xl">Period</th>
+                  <th className="py-2.5 px-1 sm:p-3 text-center">Number</th>
+                  <th className="py-2.5 px-1 sm:p-3 text-center">Big/Small</th>
+                  <th className="py-2.5 px-2 sm:p-3 text-center rounded-r-xl">Color</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-purple-900/30 text-gray-200 font-sans">
                 {gameHistory.map((item) => (
                   <tr key={item._id || item.periodId} className="hover:bg-white/5 transition">
-                    <td className="p-3 font-mono font-bold text-gray-300 text-xs">
-                      {item.periodId}
+                    <td className="py-2.5 px-2 sm:p-3 font-mono font-bold text-gray-300 text-[10px] min-[360px]:text-[11px] sm:text-xs whitespace-nowrap">
+                      <span className="hidden sm:inline">{item.periodId}</span>
+                      <span className="sm:hidden">{item.periodId ? item.periodId.slice(-8) : ''}</span>
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="py-2.5 px-1 sm:p-3 text-center">
                       <div className="inline-flex justify-center">
-                        <WinGoBall num={item.winningNumber} size="sm" />
+                        <WinGoBall
+                          num={item.winningNumber}
+                          size="xs"
+                          className="w-5 h-5 min-[380px]:w-6 min-[380px]:h-6 sm:w-7 sm:h-7"
+                        />
                       </div>
                     </td>
-                    <td className="p-3 text-center font-bold">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${item.winningSize === 'BIG'
+                    <td className="py-2.5 px-1 sm:p-3 text-center font-bold">
+                      <span className={`px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black inline-block ${item.winningSize === 'BIG'
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         }`}>
                         {item.winningSize === 'BIG' ? 'Big' : 'Small'}
                       </span>
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="py-2.5 px-2 sm:p-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {item.winningColor === 'RED_VIOLET' ? (
                           <>
-                            <span className="w-3 h-3 rounded-full bg-red-500" />
-                            <span className="w-3 h-3 rounded-full bg-purple-500" />
+                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-red-500 shrink-0 shadow-sm" />
+                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-purple-500 shrink-0 shadow-sm" />
                           </>
                         ) : item.winningColor === 'GREEN_VIOLET' ? (
                           <>
-                            <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                            <span className="w-3 h-3 rounded-full bg-purple-500" />
+                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-emerald-500 shrink-0 shadow-sm" />
+                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-purple-500 shrink-0 shadow-sm" />
                           </>
                         ) : (
-                          <span className={`w-3.5 h-3.5 rounded-full ${item.winningColor === 'RED' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                          <span className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full shrink-0 shadow-sm ${item.winningColor === 'RED' ? 'bg-red-500' : 'bg-emerald-500'}`} />
                         )}
                       </div>
                     </td>
@@ -387,7 +392,7 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                       </span>
                       <div className={`font-mono font-black text-sm mt-0.5 ${isWon ? 'text-emerald-400' : 'text-red-400'
                         }`}>
-                        {isWon ? `+₹${Math.round(bet.payoutAmount)}` : `-₹${Math.round(bet.totalAmount)}`}
+                        {isWon ? `+₹${Number(bet.payoutAmount || 0).toFixed(2)}` : `-₹${Number(bet.totalAmount || 0).toFixed(2)}`}
                       </div>
                     </div>
                   </div>
@@ -401,7 +406,7 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                       </div>
                       <div className="flex justify-between text-gray-400">
                         <span>Unit Amount:</span>
-                        <span className="text-white">₹{Math.round(bet.unitPrice)}</span>
+                        <span className="text-white">₹{Number(bet.unitPrice || 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-gray-400">
                         <span>Quantity / Multiplier:</span>
@@ -409,12 +414,12 @@ export const WinGoHistoryTabs = ({ activeMode = '30s', lastRoundResult = null })
                       </div>
                       <div className="flex justify-between text-gray-400">
                         <span>Total Bet:</span>
-                        <span className="text-amber-400 font-bold">₹{Math.round(bet.totalAmount)}</span>
+                        <span className="text-amber-400 font-bold">₹{Number(bet.totalAmount || 0).toFixed(2)}</span>
                       </div>
                       {isWon && (
                         <div className="flex justify-between text-emerald-400 font-bold border-t border-purple-900/30 pt-1.5">
                           <span>Winning Payout:</span>
-                          <span>+₹{Math.round(bet.payoutAmount)}</span>
+                          <span>+₹{Number(bet.payoutAmount || 0).toFixed(2)}</span>
                         </div>
                       )}
                     </div>
