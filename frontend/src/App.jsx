@@ -8,6 +8,8 @@ import { ChickenRoadGame } from './components/ChickenRoadGame';
 import { WinGoGame } from './components/WinGoGame';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminLogin } from './pages/AdminLogin';
+import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
+import { SuperAdminLogin } from './pages/SuperAdminLogin';
 import { DepositModal } from './components/DepositModal';
 import { WithdrawModal } from './components/WithdrawModal';
 import { AuthModal } from './components/AuthModal';
@@ -16,7 +18,7 @@ import { UserWalletDrawer } from './components/UserWalletDrawer';
 function MainApp() {
   const { user, notification, depositPopup } = useAuth();
   
-  // Isolated Route/View Manager: 'home' | 'aviator' | 'chicken' | 'wingo' | 'admin' | 'admin-login'
+  // Isolated Route/View Manager: 'home' | 'aviator' | 'chicken' | 'wingo' | 'admin' | 'admin-login' | 'superad' | 'superad-login'
   const [activeTab, setActiveTab] = useState(() => {
     const path = window.location.pathname;
     if (path === '/game/aviator') return 'aviator';
@@ -24,6 +26,8 @@ function MainApp() {
     if (path === '/game/wingo') return 'wingo';
     if (path === '/admin') return 'admin';
     if (path === '/admin-login') return 'admin-login';
+    if (path === '/superad') return 'superad';
+    if (path === '/superad-login') return 'superad-login';
     return 'home';
   });
 
@@ -52,6 +56,8 @@ function MainApp() {
     else if (tab === 'wingo') window.history.pushState({}, '', '/game/wingo');
     else if (tab === 'admin') window.history.pushState({}, '', '/admin');
     else if (tab === 'admin-login') window.history.pushState({}, '', '/admin-login');
+    else if (tab === 'superad') window.history.pushState({}, '', '/superad');
+    else if (tab === 'superad-login') window.history.pushState({}, '', '/superad-login');
     else window.history.pushState({}, '', '/');
   };
 
@@ -63,6 +69,8 @@ function MainApp() {
       else if (path === '/game/wingo') setActiveTab('wingo');
       else if (path === '/admin') setActiveTab('admin');
       else if (path === '/admin-login') setActiveTab('admin-login');
+      else if (path === '/superad') setActiveTab('superad');
+      else if (path === '/superad-login') setActiveTab('superad-login');
       else setActiveTab('home');
     };
 
@@ -70,7 +78,7 @@ function MainApp() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const isAdminView = activeTab === 'admin' || activeTab === 'admin-login';
+  const isAdminView = activeTab === 'admin' || activeTab === 'admin-login' || activeTab === 'superad' || activeTab === 'superad-login';
 
   return (
     <div className="min-h-screen bg-[#070210] text-gray-100 flex flex-col selection:bg-amber-500 selection:text-black font-sans">
@@ -205,7 +213,7 @@ function MainApp() {
 
         {/* ISOLATED ADMIN ROUTE */}
         {activeTab === 'admin' && (
-          user && user.role === 'ADMIN' ? (
+          user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN') ? (
             <AdminDashboard onNavigate={navigateTo} />
           ) : (
             <AdminLogin onLoginSuccess={() => navigateTo('admin')} />
@@ -214,6 +222,19 @@ function MainApp() {
 
         {activeTab === 'admin-login' && (
           <AdminLogin onLoginSuccess={() => navigateTo('admin')} />
+        )}
+
+        {/* ISOLATED SUPER ADMIN ROUTE (/superad) */}
+        {activeTab === 'superad' && (
+          user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN') ? (
+            <SuperAdminDashboard onNavigate={navigateTo} />
+          ) : (
+            <SuperAdminLogin onLoginSuccess={() => navigateTo('superad')} />
+          )
+        )}
+
+        {activeTab === 'superad-login' && (
+          <SuperAdminLogin onLoginSuccess={() => navigateTo('superad')} />
         )}
 
       </main>

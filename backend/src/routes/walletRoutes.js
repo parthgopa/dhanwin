@@ -3,6 +3,9 @@ import QRCode from 'qrcode';
 import { verifyToken } from '../middleware/auth.js';
 import { User } from '../models/User.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
+import { SystemSetting } from '../models/SystemSetting.js';
+import { BetHistory } from '../models/BetHistory.js';
+import { WinGoBet } from '../models/WinGoBet.js';
 
 const router = express.Router();
 
@@ -192,9 +195,33 @@ router.post('/webhook/bank-credit', async (req, res) => {
   }
 });
 
-// 3. Request Withdrawal (Min ₹500, Max ₹5000)
+// 0. Public System Status (Withdrawal/Deposit Maintenance Availability)
+router.get('/system-status', async (req, res) => {
+  try {
+    const settings = await SystemSetting.getGlobal();
+    res.json({
+      isWithdrawalDisabled: settings.isWithdrawalDisabled || false,
+      withdrawalDisabledMessage: settings.withdrawalDisabledMessage || 'Withdrawals are temporarily paused due to scheduled banking gateway maintenance / technical issue. Please try again shortly.',
+      isDepositDisabled: settings.isDepositDisabled || false,
+      depositDisabledMessage: settings.depositDisabledMessage || 'Deposits are temporarily undergoing gateway sync. Please try again in a few minutes.',
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching system status', error: error.message });
+  }
+});
+
+// 3. Request Withdrawal (Min ₹300, Max ₹5000)
 router.post('/withdraw', verifyToken, async (req, res) => {
   try {
+    // 0. Check Global Withdrawal Kill-Switch / Maintenance Mode
+    const settings = await SystemSetting.getGlobal();
+    if (settings.isWithdrawalDisabled) {
+      return res.status(400).json({
+        message: settings.withdrawalDisabledMessage || 'Withdrawals are temporarily paused due to technical issue / scheduled banking gateway maintenance. Please try again shortly.',
+        isMaintenance: true,
+      });
+    }
+
     const { amount, upiId, accountNumber, ifscCode, accountHolderName } = req.body;
     const numAmount = Number(amount);
 
@@ -264,11 +291,59 @@ router.post('/withdraw', verifyToken, async (req, res) => {
       },
     });
 
-    const populatedTx = await WalletTransaction.findById(transaction._id).populate('userId', 'username phone walletBalance');
+    const populatedTx = await WalletTransaction.findById(transaction._id).populate('userId', 'username phone walletBalance isExcludedFromStats');
     const io = req.app.get('io');
     if (io) {
       io.to('admin_room').emit('admin:new_transaction', { transaction: populatedTx });
       io.emit('admin:new_transaction', { transaction: populatedTx });
+    }
+
+    // ── Real-Time Risk Anomaly Detection ─────────────────────────────────
+    // Calculate player's net earnings in the last 24h
+    try {
+      const recentAviatorWins = await BetHistory.aggregate([
+        { $match: { userId: user._id, createdAt: { $gte: twentyFourHoursAgo }, status: 'CASHOUT' } },
+        { $group: { _id: null, totalWon: { $sum: '$payoutAmount' }, totalBet: { $sum: '$betAmount' } } },
+      ]);
+      const recentWinGoWins = await WinGoBet.aggregate([
+        { $match: { userId: user._id, createdAt: { $gte: twentyFourHoursAgo }, status: 'WON' } },
+        { $group: { _id: null, totalWon: { $sum: '$payoutAmount' }, totalBet: { $sum: '$totalAmount' } } },
+      ]);
+
+      const aviatorNet = (recentAviatorWins[0]?.totalWon || 0) - (recentAviatorWins[0]?.totalBet || 0);
+      const wingoNet = (recentWinGoWins[0]?.totalWon || 0) - (recentWinGoWins[0]?.totalBet || 0);
+      const total24hProfit = Math.round(aviatorNet + wingoNet);
+
+      if (total24hProfit >= 1500 || numAmount >= 3000) {
+        const alertObj = {
+          userId: user._id,
+          username: user.username,
+          alertType: 'HIGH_PROFIT_WITHDRAWAL',
+          amount: numAmount,
+          message: `🚨 Player "${user.username}" requested ₹${numAmount} withdrawal after earning ₹${total24hProfit} in the last 24h!`,
+          details: {
+            withdrawalAmount: numAmount,
+            profit24h: total24hProfit,
+            walletBalance: user.walletBalance,
+            phone: user.phone,
+          },
+          createdAt: new Date(),
+          isDismissed: false,
+        };
+
+        settings.riskAlerts.unshift(alertObj);
+        // Keep max 50 recent alerts
+        if (settings.riskAlerts.length > 50) settings.riskAlerts = settings.riskAlerts.slice(0, 50);
+        await settings.save();
+
+        if (io) {
+          io.to('admin_room').emit('superad:risk_alert', alertObj);
+          io.to('admin_room').emit('admin:risk_alert', alertObj);
+          io.emit('superad:risk_alert', alertObj);
+        }
+      }
+    } catch (riskErr) {
+      console.error('[Risk Anomaly Evaluation Error]', riskErr);
     }
 
     res.status(201).json({

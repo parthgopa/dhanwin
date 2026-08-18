@@ -36,6 +36,7 @@ export const authAPI = {
 };
 
 export const walletAPI = {
+  getSystemStatus: () => apiCall('/wallet/system-status', 'GET'),
   getDepositQR: (amount) => apiCall('/wallet/deposit/qr', 'POST', { amount }),
   submitUTR: (amount, utrNumber) => apiCall('/wallet/deposit/submit-utr', 'POST', { amount, utrNumber }),
   withdraw: (data) => apiCall('/wallet/withdraw', 'POST', data),
@@ -61,6 +62,23 @@ export const adminAPI = {
   toggleBlock: (userId) => apiCall('/admin/toggle-block', 'POST', { userId }),
   toggleAccountExclusion: (userId) => apiCall(`/admin/users/${userId}/toggle-exclude`, 'POST'),
   getLivePlayers: () => apiCall('/admin/live-players', 'GET'),
+};
+
+export const superAdminAPI = {
+  login: (data) => apiCall('/superad/login', 'POST', data),
+  getOverview: ({ timeframe = 'today', startDate = '', endDate = '' } = {}) => {
+    const params = new URLSearchParams({ timeframe });
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return apiCall(`/superad/overview?${params.toString()}`, 'GET');
+  },
+  getUser360: (userId) => apiCall(`/superad/users/${userId}/360`, 'GET'),
+  toggleBlockUser: (userId) => apiCall(`/superad/users/${userId}/toggle-block`, 'POST'),
+  toggleExcludeUser: (userId) => apiCall(`/superad/users/${userId}/toggle-exclude`, 'POST'),
+  toggleWithdrawals: (data) => apiCall('/superad/settings/toggle-withdrawals', 'POST', data),
+  dismissRiskAlert: (alertId) => apiCall(`/superad/risk-alerts/${alertId}/dismiss`, 'POST'),
+  processTransaction: (transactionId, action, adminNote) =>
+    apiCall(`/superad/transactions/${transactionId}/process`, 'POST', { action, adminNote }),
 };
 
 export const gameAPI = {

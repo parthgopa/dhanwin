@@ -17,6 +17,19 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
   const [accountHolderName, setAccountHolderName] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isWithdrawalDisabled, setIsWithdrawalDisabled] = useState(false);
+  const [withdrawalDisabledMessage, setWithdrawalDisabledMessage] = useState('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      walletAPI.getSystemStatus().then((res) => {
+        if (res) {
+          setIsWithdrawalDisabled(!!res.isWithdrawalDisabled);
+          setWithdrawalDisabledMessage(res.withdrawalDisabledMessage || '');
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -105,13 +118,26 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
           const accountAgeMs = user?.createdAt ? Date.now() - new Date(user.createdAt).getTime() : Infinity;
           const isAccount24hOld = accountAgeMs >= 24 * 60 * 60 * 1000;
           const hoursRemaining = !isAccount24hOld ? Math.ceil((24 * 60 * 60 * 1000 - accountAgeMs) / (60 * 60 * 1000)) : 0;
-          const isAmountValid = isMinValid && isMaxValid && isBalanceSufficient && isAccount24hOld;
+          const isAmountValid = !isWithdrawalDisabled && isMinValid && isMaxValid && isBalanceSufficient && isAccount24hOld;
 
           return (
             <form onSubmit={handleSubmitWithdrawal} className="space-y-4">
 
+              {/* Global Banking Gateway Maintenance Notice */}
+              {isWithdrawalDisabled && (
+                <div className="p-3.5 bg-red-500/10 border border-red-500/40 rounded-xl text-xs text-red-300 flex items-start gap-2.5 shadow-lg">
+                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-red-400 block text-xs">Gateway Maintenance / Technical Issue</span>
+                    <span className="text-[11px] leading-relaxed">
+                      {withdrawalDisabledMessage || 'Withdrawals are temporarily paused due to scheduled banking gateway maintenance / technical issue. Please try again shortly.'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* 24-Hour Security Notice if newly registered */}
-              {!isAccount24hOld && (
+              {!isWithdrawalDisabled && !isAccount24hOld && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
@@ -259,7 +285,9 @@ export const WithdrawModal = ({ isOpen, onClose }) => {
                 ) : (
                   <>
                     <span>
-                      {!isAccount24hOld
+                      {isWithdrawalDisabled
+                        ? 'Withdrawals Temporarily Paused (Maintenance)'
+                        : !isAccount24hOld
                         ? `Withdrawals Unlock in ${hoursRemaining}h (24h Lock)`
                         : !isMinValid
                         ? `Enter min ₹${MIN_WITHDRAWAL_AMOUNT} to withdraw`

@@ -8,6 +8,7 @@ import { User } from './models/User.js';
 import authRoutes from './routes/authRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
 import winGoRoutes from './routes/winGoRoutes.js';
 import { initGameSockets } from './socket/gameSocket.js';
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/superad', superAdminRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/wingo', winGoRoutes);
 
