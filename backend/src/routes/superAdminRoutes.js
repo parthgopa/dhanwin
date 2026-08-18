@@ -1,19 +1,21 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User } from '../models/User.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { BetHistory } from '../models/BetHistory.js';
 import { WinGoBet } from '../models/WinGoBet.js';
 import { SystemSetting } from '../models/SystemSetting.js';
 import { verifyToken, verifyAdmin } from '../middleware/auth.js';
+import { emitToUser } from '../socket/gameSocket.js';
 
 const router = express.Router();
 
 // ── Superadmin Authentication Helper ─────────────────────────────────────────
 const verifySuperAdmin = async (req, res, next) => {
   if (!req.user || (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN')) {
-    return res.status(403).json({ message: 'Restricted: Super Admin access required' });
+    return res.status(403).json({ message: 'Access Denied: Super Admin master clearance required.' });
   }
   next();
 };
@@ -45,8 +47,17 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid superadmin credentials' });
     }
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    adminUser.currentSessionId = sessionId;
+    await adminUser.save();
+
+    emitToUser(adminUser._id, 'session:evicted', {
+      message: 'Your superadmin account was logged in from another device. Session terminated.',
+      code: 'SESSION_TERMINATED',
+    });
+
     const token = jwt.sign(
-      { id: adminUser._id, username: adminUser.username, role: adminUser.role },
+      { id: adminUser._id, username: adminUser.username, role: adminUser.role, sessionId },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );

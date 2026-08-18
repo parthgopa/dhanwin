@@ -20,6 +20,14 @@ export const verifyToken = async (req, res, next) => {
       return res.status(403).json({ message: 'Account is suspended' });
     }
 
+    // Single active device session enforcement
+    if (user.currentSessionId && decoded.sessionId && decoded.sessionId !== user.currentSessionId) {
+      return res.status(401).json({
+        code: 'SESSION_TERMINATED',
+        message: 'You have been logged out because your account was accessed on another device.',
+      });
+    }
+
     req.user = user;
     next();
   } catch (error) {

@@ -14,6 +14,8 @@ import { DepositModal } from './components/DepositModal';
 import { WithdrawModal } from './components/WithdrawModal';
 import { AuthModal } from './components/AuthModal';
 import { UserWalletDrawer } from './components/UserWalletDrawer';
+import { DailyRewardModal } from './components/DailyRewardModal';
+import { walletAPI } from './services/api';
 
 function MainApp() {
   const { user, notification, depositPopup } = useAuth();
@@ -37,6 +39,34 @@ function MainApp() {
   const [authInitialMode, setAuthInitialMode] = useState('login');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWalletDrawerOpen, setIsWalletDrawerOpen] = useState(false);
+  const [isDailyRewardOpen, setIsDailyRewardOpen] = useState(false);
+
+  // Automatically pop up Daily Reward Modal if unclaimed on login or platform open
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id || user._id;
+    if (!userId) return;
+
+    const checkAndPopupDailyReward = async () => {
+      try {
+        const sessionKey = `daily_reward_checked_${userId}_${new Date().toDateString()}`;
+        if (sessionStorage.getItem(sessionKey)) return;
+
+        const res = await walletAPI.getDailyRewardStatus();
+        if (res?.canClaim && res.availableReward > 0) {
+          // Delay briefly (1.2s) for smooth page loading, then pop up modal
+          setTimeout(() => {
+            setIsDailyRewardOpen(true);
+            sessionStorage.setItem(sessionKey, 'true');
+          }, 1200);
+        }
+      } catch (err) {
+        console.warn('[Daily Reward Auto Check]', err?.message);
+      }
+    };
+
+    checkAndPopupDailyReward();
+  }, [user?.id, user?._id]);
 
   const handleOpenAuth = (param = 'login') => {
     const mode = typeof param === 'string' ? param : (param?.mode || 'login');
@@ -85,9 +115,9 @@ function MainApp() {
       
       {/* Real-time Global Toast Notification (Error / Success / Info) */}
       {notification && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] pointer-events-none w-full max-w-[92vw] sm:max-w-md px-3 animate-fadeIn">
+        <div className="fixed top-16 sm:top-5 left-1/2 -translate-x-1/2 z-[99999] pointer-events-none w-auto max-w-[94vw] sm:max-w-md px-2 sm:px-3 animate-fadeIn">
           <div
-            className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 text-xs font-bold backdrop-blur-xl ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl shadow-2xl border flex items-center gap-2.5 sm:gap-3 text-xs font-bold backdrop-blur-xl ${
               notification.type === 'error'
                 ? 'bg-[#1e070c]/95 border-red-500/80 text-red-100 shadow-red-950/50'
                 : notification.type === 'success'
@@ -96,7 +126,7 @@ function MainApp() {
             }`}
           >
             <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border ${
                 notification.type === 'error'
                   ? 'bg-red-500/20 border-red-500/40 text-red-400'
                   : notification.type === 'success'
@@ -105,16 +135,16 @@ function MainApp() {
               }`}
             >
               {notification.type === 'error' ? (
-                <AlertCircle className="w-5 h-5" />
+                <AlertCircle className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               ) : notification.type === 'success' ? (
-                <CheckCircle2 className="w-5 h-5" />
+                <CheckCircle2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               ) : (
-                <Info className="w-5 h-5" />
+                <Info className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div
-                className={`text-[10px] font-black uppercase tracking-wider ${
+                className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
                   notification.type === 'error'
                     ? 'text-red-400'
                     : notification.type === 'success'
@@ -124,7 +154,7 @@ function MainApp() {
               >
                 {notification.type === 'error' ? 'Notice' : notification.type === 'success' ? 'Success' : 'Notification'}
               </div>
-              <div className="text-white text-xs font-semibold leading-snug break-words">
+              <div className="text-white text-[11px] sm:text-xs font-semibold leading-snug break-words">
                 {notification.message || notification.text}
               </div>
             </div>
@@ -135,17 +165,17 @@ function MainApp() {
       {/* Instant User Deposit Success Notification Card */}
       {depositPopup && (
         <div
-          className={`fixed top-4 left-1/2 z-[99999] pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 text-sm font-bold
+          className={`fixed top-16 sm:top-5 left-1/2 z-[99999] pointer-events-none px-3.5 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl shadow-2xl border flex items-center gap-2.5 text-xs sm:text-sm font-bold
             bg-emerald-950/95 border-emerald-500/60 text-emerald-300 backdrop-blur-lg
             ${depositPopup.animClass}`}
           style={{ transform: 'translateX(-50%)' }}
         >
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 font-mono font-black text-base">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 font-mono font-black text-sm sm:text-base">
             ✓
           </div>
           <div>
-            <div className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">Deposit Credited!</div>
-            <div className="text-white font-mono font-bold">
+            <div className="text-[9px] sm:text-[10px] text-emerald-400 font-black uppercase tracking-wider">Deposit Credited!</div>
+            <div className="text-white font-mono font-bold text-xs sm:text-sm">
               +₹{depositPopup.amount} Added to your account!
             </div>
           </div>
@@ -161,6 +191,7 @@ function MainApp() {
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
           onOpenAuth={handleOpenAuth}
           onOpenWalletDrawer={() => setIsWalletDrawerOpen(true)}
+          onOpenDailyReward={() => setIsDailyRewardOpen(true)}
           mobileMenuOpen={isMobileMenuOpen}
           setMobileMenuOpen={setIsMobileMenuOpen}
         />
@@ -261,6 +292,12 @@ function MainApp() {
         onClose={() => setIsWalletDrawerOpen(false)}
         onOpenDeposit={() => setIsDepositOpen(true)}
         onOpenWithdraw={() => setIsWithdrawOpen(true)}
+        onOpenDailyReward={() => setIsDailyRewardOpen(true)}
+      />
+
+      <DailyRewardModal
+        isOpen={isDailyRewardOpen}
+        onClose={() => setIsDailyRewardOpen(false)}
       />
 
     </div>

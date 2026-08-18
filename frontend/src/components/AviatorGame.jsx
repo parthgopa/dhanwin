@@ -91,6 +91,8 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
   const socketRef = useRef(null);
   const hasBet1Ref = useRef(false);
   const hasBet2Ref = useRef(false);
+  const bet1IdRef = useRef(null);
+  const bet2IdRef = useRef(null);
   const isQueued1Ref = useRef(false);
   const isQueued2Ref = useRef(false);
   const queuedAmount1Ref = useRef(0);
@@ -164,6 +166,8 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       setServerSeed('');
       hasBet1Ref.current = false;
       hasBet2Ref.current = false;
+      bet1IdRef.current = null;
+      bet2IdRef.current = null;
       setHasBet1(false);
       setHasBet2(false);
       setIsCashedOut1(false);
@@ -180,26 +184,42 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
         if (isQueued1Ref.current) {
           hasBet1Ref.current = true;
           setHasBet1(true);
-          socket.emit('aviator:place_bet', { amount: queuedAmount1Ref.current, autoCashOut: autoCashOut1EnabledRef.current ? Number(autoCashOut1MultRef.current) : null });
+          socket.emit('aviator:place_bet', {
+            panel: 1,
+            amount: queuedAmount1Ref.current,
+            autoCashOut: autoCashOut1EnabledRef.current ? Number(autoCashOut1MultRef.current) : null
+          });
           isQueued1Ref.current = false;
           setIsQueued1(false);
           setQueuedAmount1(0);
         } else if (autoBet1EnabledRef.current) {
           hasBet1Ref.current = true;
           setHasBet1(true);
-          socket.emit('aviator:place_bet', { amount: bet1AmountRef.current, autoCashOut: autoCashOut1EnabledRef.current ? Number(autoCashOut1MultRef.current) : null });
+          socket.emit('aviator:place_bet', {
+            panel: 1,
+            amount: bet1AmountRef.current,
+            autoCashOut: autoCashOut1EnabledRef.current ? Number(autoCashOut1MultRef.current) : null
+          });
         }
         if (isQueued2Ref.current) {
           hasBet2Ref.current = true;
           setHasBet2(true);
-          socket.emit('aviator:place_bet', { amount: queuedAmount2Ref.current, autoCashOut: autoCashOut2EnabledRef.current ? Number(autoCashOut2MultRef.current) : null });
+          socket.emit('aviator:place_bet', {
+            panel: 2,
+            amount: queuedAmount2Ref.current,
+            autoCashOut: autoCashOut2EnabledRef.current ? Number(autoCashOut2MultRef.current) : null
+          });
           isQueued2Ref.current = false;
           setIsQueued2(false);
           setQueuedAmount2(0);
         } else if (autoBet2EnabledRef.current) {
           hasBet2Ref.current = true;
           setHasBet2(true);
-          socket.emit('aviator:place_bet', { amount: bet2AmountRef.current, autoCashOut: autoCashOut2EnabledRef.current ? Number(autoCashOut2MultRef.current) : null });
+          socket.emit('aviator:place_bet', {
+            panel: 2,
+            amount: bet2AmountRef.current,
+            autoCashOut: autoCashOut2EnabledRef.current ? Number(autoCashOut2MultRef.current) : null
+          });
         }
       }
     });
@@ -221,28 +241,45 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       setLastEventTime(Date.now());
       if (hasBet1Ref.current && autoCashOut1EnabledRef.current && cur >= Number(autoCashOut1MultRef.current)) {
         hasBet1Ref.current = false;
-        socket.emit('aviator:cashout');
+        socket.emit('aviator:cashout', { panel: 1, betId: bet1IdRef.current });
       }
       if (hasBet2Ref.current && autoCashOut2EnabledRef.current && cur >= Number(autoCashOut2MultRef.current)) {
         hasBet2Ref.current = false;
-        socket.emit('aviator:cashout');
+        socket.emit('aviator:cashout', { panel: 2, betId: bet2IdRef.current });
       }
     });
 
     socket.on('aviator:bet_success', (data) => {
-      // Determine which panel placed the bet by checking refs
-      const panel = !hasBet2Ref.current ? 1 : 2;
-      hasBet1Ref.current = true;
-      setHasBet1(true);
-      showBetToast(panel, bet1AmountRef.current);
+      const panel = Number(data.panel) || 1;
+      if (panel === 2) {
+        hasBet2Ref.current = true;
+        setHasBet2(true);
+        bet2IdRef.current = data.betId || data.activeBet?.betId;
+        showBetToast(2, bet2AmountRef.current);
+      } else {
+        hasBet1Ref.current = true;
+        setHasBet1(true);
+        bet1IdRef.current = data.betId || data.activeBet?.betId;
+        showBetToast(1, bet1AmountRef.current);
+      }
       setLastEventTime(Date.now());
     });
 
     socket.on('aviator:cashout_success', (data) => {
-      setIsCashedOut1(true);
-      setCashoutDetails1(data);
+      const isPanel2 = Number(data.panel) === 2 || (bet2IdRef.current && String(data.betId) === String(bet2IdRef.current));
+      if (isPanel2) {
+        hasBet2Ref.current = false;
+        setHasBet2(false);
+        setIsCashedOut2(true);
+        setCashoutDetails2(data);
+      } else {
+        hasBet1Ref.current = false;
+        setHasBet1(false);
+        setIsCashedOut1(true);
+        setCashoutDetails1(data);
+      }
       updateBalance(data.newBalance);
-      showToast(`Cashed out at ${data.cashOutMultiplier}x! Won ₹${data.payoutAmount}`, 'success');
+      showToast(`Card ${isPanel2 ? 2 : 1}: Cashed out at ${data.cashOutMultiplier}x! Won ₹${data.payoutAmount}`, 'success');
       setLastEventTime(Date.now());
     });
 
@@ -269,6 +306,8 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
       if (data.history) setHistory(data.history);
       hasBet1Ref.current = false;
       hasBet2Ref.current = false;
+      bet1IdRef.current = null;
+      bet2IdRef.current = null;
       setLastEventTime(Date.now());
     });
 
@@ -418,7 +457,13 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
     }
     hasBet1Ref.current = true;
     setHasBet1(true);
-    if (socketRef.current) socketRef.current.emit('aviator:place_bet', { amount: clampedBet1, autoCashOut: autoCashOut1Enabled ? Number(autoCashOut1Mult) : null });
+    if (socketRef.current) {
+      socketRef.current.emit('aviator:place_bet', {
+        panel: 1,
+        amount: clampedBet1,
+        autoCashOut: autoCashOut1Enabled ? Number(autoCashOut1Mult) : null
+      });
+    }
     showBetToast(1, clampedBet1);
   };
 
@@ -429,7 +474,9 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
 
   const handleCashout1 = () => {
     hasBet1Ref.current = false;
-    if (socketRef.current) socketRef.current.emit('aviator:cashout');
+    if (socketRef.current) {
+      socketRef.current.emit('aviator:cashout', { panel: 1, betId: bet1IdRef.current });
+    }
   };
 
   const handlePlaceBet2 = () => {
@@ -448,7 +495,13 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
     }
     hasBet2Ref.current = true;
     setHasBet2(true);
-    if (socketRef.current) socketRef.current.emit('aviator:place_bet', { amount: clampedBet2, autoCashOut: autoCashOut2Enabled ? Number(autoCashOut2Mult) : null });
+    if (socketRef.current) {
+      socketRef.current.emit('aviator:place_bet', {
+        panel: 2,
+        amount: clampedBet2,
+        autoCashOut: autoCashOut2Enabled ? Number(autoCashOut2Mult) : null
+      });
+    }
     showBetToast(2, clampedBet2);
   };
 
@@ -459,7 +512,9 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
 
   const handleCashout2 = () => {
     hasBet2Ref.current = false;
-    if (socketRef.current) socketRef.current.emit('aviator:cashout');
+    if (socketRef.current) {
+      socketRef.current.emit('aviator:cashout', { panel: 2, betId: bet2IdRef.current });
+    }
   };
 
   // ── Loading screen ──────────────────────────────────────────────────────
@@ -578,18 +633,18 @@ export const AviatorGame = ({ onOpenDeposit, onOpenAuth }) => {
     <div className="w-full space-y-2 font-sans flex flex-col relative pb-28 lg:pb-0 lg:h-[calc(100vh-72px)] min-h-0">
 
 
-      {/* Bug 3: Bet Placed Toast — centered above canvas */}
+      {/* Bug 3: Bet Placed Toast — centered below navbar */}
       {betToast && (
         <div
-          className={`fixed top-24 left-1/2 z-[999] pointer-events-none px-5 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 text-sm font-bold
+          className={`fixed top-16 sm:top-24 left-1/2 z-[999] pointer-events-none px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl shadow-2xl border flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold
             bg-emerald-900/95 border-emerald-500/60 text-emerald-300
             ${betToastHiding ? 'bet-pop-toast hiding' : 'bet-pop-toast'}`}
           style={{ transform: 'translateX(-50%)' }}
         >
-          <span className="text-xl">✅</span>
+          <span className="text-base sm:text-lg">✅</span>
           <div className="text-left">
-            <div className="text-xs text-emerald-400 uppercase tracking-widest font-black">Bet Placed!</div>
-            <div className="text-white font-mono">₹{Number(betToast.amount).toFixed(2)} — Panel {betToast.panel}</div>
+            <div className="text-[9px] sm:text-xs text-emerald-400 uppercase tracking-widest font-black">Bet Placed!</div>
+            <div className="text-white text-xs sm:text-sm font-mono">₹{Number(betToast.amount).toFixed(2)} — Card {betToast.panel}</div>
           </div>
         </div>
       )}

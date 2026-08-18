@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { User } from '../models/User.js';
 import { verifyToken } from '../middleware/auth.js';
+import { emitToUser } from '../socket/gameSocket.js';
 
 const router = express.Router();
 
@@ -177,6 +178,8 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+
     // Create user with ₹10.00 Signup Bonus
     const newUser = await User.create({
       username: regUsername,
@@ -185,10 +188,11 @@ router.post('/register', async (req, res) => {
       passwordHash,
       role: 'USER',
       walletBalance: 10.00, // ₹10 Signup Bonus
+      currentSessionId: sessionId,
     });
 
     const token = jwt.sign(
-      { id: newUser._id, username: newUser.username, role: newUser.role },
+      { id: newUser._id, username: newUser.username, role: newUser.role, sessionId },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -254,8 +258,18 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ message: 'Your account is blocked. Please contact support.' });
     }
 
+    // Generate new unique sessionId and evict previous device session
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    user.currentSessionId = sessionId;
+    await user.save();
+
+    emitToUser(user._id, 'session:evicted', {
+      message: 'You have been logged out because your account was accessed from another device.',
+      code: 'SESSION_TERMINATED',
+    });
+
     const token = jwt.sign(
-      { id: user._id, username: user.username, role: user.role },
+      { id: user._id, username: user.username, role: user.role, sessionId },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -301,8 +315,17 @@ router.post('/admin-login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid admin credentials' });
     }
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    adminUser.currentSessionId = sessionId;
+    await adminUser.save();
+
+    emitToUser(adminUser._id, 'session:evicted', {
+      message: 'Your admin account was logged in from another device. Session terminated.',
+      code: 'SESSION_TERMINATED',
+    });
+
     const token = jwt.sign(
-      { id: adminUser._id, username: adminUser.username, role: 'ADMIN' },
+      { id: adminUser._id, username: adminUser.username, role: 'ADMIN', sessionId },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );

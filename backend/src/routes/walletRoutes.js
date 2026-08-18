@@ -402,4 +402,120 @@ router.post('/mark-notified', verifyToken, async (req, res) => {
   }
 });
 
+// 7. Get Daily Reward Status
+router.get('/daily-reward-status', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let canClaim = false;
+    let availableReward = 0;
+    let daysAccumulated = 0;
+    let nextClaimInSeconds = 0;
+
+    if (!user.lastDailyRewardClaim) {
+      // First time claiming: Eligible for ₹1 welcome reward, up to ₹5 if joined earlier
+      const daysSinceJoined = Math.floor((now - new Date(user.createdAt).getTime()) / ONE_DAY_MS) + 1;
+      daysAccumulated = Math.min(Math.max(daysSinceJoined, 1), 5);
+      availableReward = daysAccumulated;
+      canClaim = true;
+      nextClaimInSeconds = 0;
+    } else {
+      const msDiff = now - new Date(user.lastDailyRewardClaim).getTime();
+      const daysPassed = Math.floor(msDiff / ONE_DAY_MS);
+
+      if (daysPassed >= 1) {
+        canClaim = true;
+        daysAccumulated = Math.min(daysPassed, 5);
+        availableReward = daysAccumulated;
+        nextClaimInSeconds = 0;
+      } else {
+        canClaim = false;
+        availableReward = 0;
+        daysAccumulated = 0;
+        nextClaimInSeconds = Math.max(0, Math.ceil((ONE_DAY_MS - msDiff) / 1000));
+      }
+    }
+
+    res.json({
+      canClaim,
+      availableReward,
+      daysAccumulated,
+      nextClaimInSeconds,
+      lastDailyRewardClaim: user.lastDailyRewardClaim,
+      totalDailyRewardsClaimed: user.totalDailyRewardsClaimed || 0,
+      walletBalance: user.walletBalance,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error checking daily reward status', error: error.message });
+  }
+});
+
+// 8. Claim Daily Reward
+router.post('/claim-daily-reward', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.isBlocked) {
+      return res.status(403).json({ message: 'Your account is suspended' });
+    }
+
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let availableReward = 0;
+
+    if (!user.lastDailyRewardClaim) {
+      const daysSinceJoined = Math.floor((now - new Date(user.createdAt).getTime()) / ONE_DAY_MS) + 1;
+      availableReward = Math.min(Math.max(daysSinceJoined, 1), 5);
+    } else {
+      const msDiff = now - new Date(user.lastDailyRewardClaim).getTime();
+      const daysPassed = Math.floor(msDiff / ONE_DAY_MS);
+
+      if (daysPassed < 1) {
+        const remainingSec = Math.ceil((ONE_DAY_MS - msDiff) / 1000);
+        const hours = Math.floor(remainingSec / 3600);
+        const mins = Math.floor((remainingSec % 3600) / 60);
+        return res.status(400).json({
+          message: `Daily reward already claimed! Next claim available in ${hours}h ${mins}m.`,
+          nextClaimInSeconds: remainingSec,
+        });
+      }
+
+      availableReward = Math.min(daysPassed, 5);
+    }
+
+    if (availableReward <= 0) {
+      return res.status(400).json({ message: 'No daily reward available to claim' });
+    }
+
+    // Add reward to wallet balance
+    user.walletBalance = Number((user.walletBalance + availableReward).toFixed(2));
+    user.lastDailyRewardClaim = new Date();
+    user.totalDailyRewardsClaimed = (user.totalDailyRewardsClaimed || 0) + availableReward;
+    await user.save();
+
+    // Create ledger transaction entry
+    await WalletTransaction.create({
+      userId: user._id,
+      type: 'DAILY_REWARD',
+      amount: availableReward,
+      status: 'APPROVED',
+      adminNote: `Claimed Daily Reward bonus (₹${availableReward} for ${availableReward} day(s) accumulated)`,
+      processedAt: new Date(),
+    });
+
+    res.json({
+      message: `🎉 Success! ₹${availableReward}.00 Daily Bonus added to your wallet!`,
+      claimedAmount: availableReward,
+      newBalance: user.walletBalance,
+      lastDailyRewardClaim: user.lastDailyRewardClaim,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error claiming daily reward', error: error.message });
+  }
+});
+
 export default router;

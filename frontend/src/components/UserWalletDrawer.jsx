@@ -13,6 +13,7 @@ export const UserWalletDrawer = ({
   onClose,
   onOpenDeposit,
   onOpenWithdraw,
+  onOpenDailyReward,
 }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('WITHDRAWALS'); // 'WITHDRAWALS' | 'DEPOSITS'
@@ -118,9 +119,26 @@ export const UserWalletDrawer = ({
               className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 active:scale-95"
             >
               <ArrowUpRight className="w-4 h-4" />
-              <span>Withdraw (₹300 - ₹5,000)</span>
+              <span>Withdraw (₹300 - ₹5k)</span>
             </button>
           </div>
+
+          {/* Daily Bonus Quick Claim Button */}
+          <button
+            onClick={() => {
+              onClose();
+              if (onOpenDailyReward) onOpenDailyReward();
+            }}
+            className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500/20 via-purple-600/30 to-amber-500/20 hover:from-amber-500/30 text-amber-300 border border-amber-500/50 hover:border-amber-400 font-black text-xs rounded-xl shadow-lg transition flex items-center justify-between active:scale-95 cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎁</span>
+              <span>Daily Bonus Vault (Free ₹1 - ₹5)</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              Claim Now &rarr;
+            </span>
+          </button>
         </div>
 
         {/* ── 3. TABS NAVIGATION ───────────────────────────────────────────── */}

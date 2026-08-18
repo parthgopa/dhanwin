@@ -21,6 +21,9 @@ export const apiCall = async (endpoint, method = 'GET', body = null) => {
   const data = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401 && (data.code === 'SESSION_TERMINATED' || data.message?.includes('another device'))) {
+      window.dispatchEvent(new CustomEvent('auth:session_terminated', { detail: data }));
+    }
     throw new Error(data.message || 'API request failed');
   }
 
@@ -37,6 +40,8 @@ export const authAPI = {
 
 export const walletAPI = {
   getSystemStatus: () => apiCall('/wallet/system-status', 'GET'),
+  getDailyRewardStatus: () => apiCall('/wallet/daily-reward-status', 'GET'),
+  claimDailyReward: () => apiCall('/wallet/claim-daily-reward', 'POST'),
   getDepositQR: (amount) => apiCall('/wallet/deposit/qr', 'POST', { amount }),
   submitUTR: (amount, utrNumber) => apiCall('/wallet/deposit/submit-utr', 'POST', { amount, utrNumber }),
   withdraw: (data) => apiCall('/wallet/withdraw', 'POST', data),

@@ -45,6 +45,18 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  currentSessionId: {
+    type: String,
+    default: null,
+  },
+  lastDailyRewardClaim: {
+    type: Date,
+    default: null,
+  },
+  totalDailyRewardsClaimed: {
+    type: Number,
+    default: 0,
+  },
 }, { timestamps: true });
 
 export const User = mongoose.model('User', userSchema);

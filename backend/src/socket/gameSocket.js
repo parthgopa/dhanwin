@@ -93,6 +93,17 @@ export const broadcastLivePlayersCount = (io) => {
   io.emit('admin:live_players_count', stats);
 };
 
+let ioInstance = null;
+
+export const getIO = () => ioInstance;
+
+export const emitToUser = (userId, event, data) => {
+  if (ioInstance && userId) {
+    ioInstance.to(`user_${userId}`).emit(event, data);
+    ioInstance.to(userId.toString()).emit(event, data);
+  }
+};
+
 export const initGameSockets = (server) => {
   const io = new Server(server, {
     cors: {
@@ -100,6 +111,7 @@ export const initGameSockets = (server) => {
       methods: ['GET', 'POST'],
     },
   });
+  ioInstance = io;
 
   io.use(async (socket, next) => {
     try {
@@ -108,7 +120,11 @@ export const initGameSockets = (server) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id);
         if (user) {
+          if (user.currentSessionId && decoded.sessionId && decoded.sessionId !== user.currentSessionId) {
+            return next(new Error('SESSION_TERMINATED'));
+          }
           socket.user = user;
+          socket.sessionId = decoded.sessionId;
         }
       }
       next();
@@ -259,6 +275,7 @@ export const initGameSockets = (server) => {
 
         const betAmount = Number(data.amount);
         const autoCashOut = data.autoCashOut ? Number(data.autoCashOut) : null;
+        const panel = Number(data.panel) || 1;
         if (!betAmount || betAmount < 1) return socket.emit('aviator:error', { message: 'Minimum bet is ₹1' });
 
         const user = await User.findById(socket.user._id);
@@ -293,6 +310,7 @@ export const initGameSockets = (server) => {
           username: user.username,
           betAmount,
           autoCashOut,
+          panel,
           status: 'PLACED',
         };
 
@@ -315,7 +333,7 @@ export const initGameSockets = (server) => {
         aviatorState.activeBetsThisRound = aviatorState.bets.filter((b) => b.status === 'PLACED').length;
 
         socket.emit('balance_update', { newBalance: user.walletBalance });
-        socket.emit('aviator:bet_success', { activeBet });
+        socket.emit('aviator:bet_success', { activeBet, panel, betId: betRecord._id });
 
         io.emit('aviator:bets_update', {
           simulatedBets: aviatorState.simulatedBets,
@@ -330,15 +348,28 @@ export const initGameSockets = (server) => {
     });
 
     // Cashout Aviator
-    socket.on('aviator:cashout', async () => {
+    socket.on('aviator:cashout', async (data = {}) => {
       try {
         if (!socket.user) return socket.emit('aviator:error', { message: 'Authentication required' });
         if (aviatorState.status !== 'RUNNING') return socket.emit('aviator:error', { message: 'Cannot cashout right now' });
 
-        const bet = aviatorState.bets.find(
-          (b) => b.userId.toString() === socket.user._id.toString() && b.status === 'PLACED'
-        );
-        if (!bet) return socket.emit('aviator:error', { message: 'No active bet found' });
+        let bet;
+        if (data.betId) {
+          bet = aviatorState.bets.find(
+            (b) => b.betId?.toString() === data.betId.toString() && b.userId.toString() === socket.user._id.toString() && b.status === 'PLACED'
+          );
+        }
+        if (!bet && data.panel) {
+          bet = aviatorState.bets.find(
+            (b) => b.panel === Number(data.panel) && b.userId.toString() === socket.user._id.toString() && b.status === 'PLACED'
+          );
+        }
+        if (!bet) {
+          bet = aviatorState.bets.find(
+            (b) => b.userId.toString() === socket.user._id.toString() && b.status === 'PLACED'
+          );
+        }
+        if (!bet) return socket.emit('aviator:error', { message: 'No active bet found for this card' });
 
         const cashOutMultiplier = aviatorState.currentMultiplier;
         const payoutAmount = Math.floor(bet.betAmount * cashOutMultiplier * 100) / 100;
@@ -372,6 +403,8 @@ export const initGameSockets = (server) => {
 
         socket.emit('balance_update', { newBalance: user.walletBalance });
         socket.emit('aviator:cashout_success', {
+          betId: bet.betId,
+          panel: bet.panel || data.panel || 1,
           cashOutMultiplier,
           payoutAmount,
           newBalance: user.walletBalance,
@@ -653,8 +686,9 @@ const startAviatorLoop = (io) => {
               payoutAmount,
             });
 
-            io.to(`user_${bet.userId}`).emit('balance_update', { newBalance: user.walletBalance });
             io.to(`user_${bet.userId}`).emit('aviator:cashout_success', {
+              betId: bet.betId,
+              panel: bet.panel || 1,
               cashOutMultiplier: current,
               payoutAmount,
               newBalance: user.walletBalance,

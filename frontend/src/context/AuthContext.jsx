@@ -105,11 +105,30 @@ export const AuthProvider = ({ children }) => {
       socket.on(`balance_update_${currentUserId}`, handleBalanceUpdate);
     }
 
+    const handleSessionEvicted = (data) => {
+      const msg = data?.message || 'You have been logged out because your account was accessed from another device.';
+      logout();
+      showToast(msg, 'error');
+    };
+
+    socket.on('session:evicted', handleSessionEvicted);
+    socket.on('auth:force_logout', handleSessionEvicted);
+
+    const handleWindowSessionTerminated = (e) => {
+      const msg = e?.detail?.message || 'You have been logged out because your account was accessed from another device.';
+      logout();
+      showToast(msg, 'error');
+    };
+    window.addEventListener('auth:session_terminated', handleWindowSessionTerminated);
+
     return () => {
       socket.off('balance_update', handleBalanceUpdate);
       socket.off('global_balance_update', handleBalanceUpdate);
       socket.off('deposit_approved', handleDepositApproved);
       socket.off('global_deposit_approved', handleDepositApproved);
+      socket.off('session:evicted', handleSessionEvicted);
+      socket.off('auth:force_logout', handleSessionEvicted);
+      window.removeEventListener('auth:session_terminated', handleWindowSessionTerminated);
       if (currentUserId) {
         socket.off(`deposit_approved_${currentUserId}`, handleDepositApproved);
         socket.off(`balance_update_${currentUserId}`, handleBalanceUpdate);
