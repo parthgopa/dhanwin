@@ -126,7 +126,7 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// 2. Register User (Verifies Email OTP & Credits ₹10 Signup Bonus)
+// 2. Register User (Verifies Email OTP & Credits ₹1 Signup Bonus)
 router.post('/register', async (req, res) => {
   try {
     const { username, phone, email, password, otp, tempToken } = req.body;
@@ -180,25 +180,25 @@ router.post('/register', async (req, res) => {
 
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
 
-    // Create user with ₹10.00 Signup Bonus
+    // Create user with ₹1.00 Signup Bonus
     const newUser = await User.create({
       username: regUsername,
       phone: regPhone,
       email: regEmail,
       passwordHash,
       role: 'USER',
-      walletBalance: 10.00, // ₹10 Signup Bonus
+      walletBalance: 1.00, // ₹1 Signup Bonus
       currentSessionId: sessionId,
     });
 
     const token = jwt.sign(
       { id: newUser._id, username: newUser.username, role: newUser.role, sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '15d' }
     );
 
     res.status(201).json({
-      message: 'Account verified & created successfully! ₹10 Signup Bonus credited.',
+      message: 'Account verified & created successfully! ₹1 Signup Bonus credited.',
       token,
       user: {
         id: newUser._id,
@@ -271,7 +271,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user._id, username: user.username, role: user.role, sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '15d' }
     );
 
     res.json({
@@ -327,7 +327,7 @@ router.post('/admin-login', async (req, res) => {
     const token = jwt.sign(
       { id: adminUser._id, username: adminUser.username, role: 'ADMIN', sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: '2d' }
     );
 
     res.json({

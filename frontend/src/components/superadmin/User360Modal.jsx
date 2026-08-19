@@ -179,6 +179,110 @@ export const User360Modal = ({ isOpen, onClose, userId, onUserUpdated, showToast
                 </div>
               </div>
 
+              {/* ── 🌟 PLAYER RETURN CONSISTENCY & DAILY RETENTION CARD 🌟 ── */}
+              {profileData?.consistency && (
+                <div className="bg-gradient-to-r from-[#1b0e36] via-[#120826] to-[#0d051c] border-2 border-amber-500/40 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#2d1b52] pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 text-lg shrink-0">
+                        👑
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">
+                            Player Return Consistency & Retention
+                          </h4>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${profileData.consistency.tierColor}`}>
+                            {profileData.consistency.tierBadge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 font-mono">
+                          Measures daily player activity, visits, bets & consecutive retention streaks
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-black font-mono flex items-center gap-1">
+                        <span>🔥 Streak:</span>
+                        <span>{profileData.consistency.loginStreak || 1}d</span>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-purple-500/10 text-purple-300 border border-purple-500/30 text-xs font-black font-mono flex items-center gap-1">
+                        <span>⭐ Best:</span>
+                        <span>{profileData.consistency.maxLoginStreak || 1}d</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 4 Consistency Metric Tiles */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    <div className="bg-[#0b0417] p-2.5 rounded-xl border border-[#261545] space-y-0.5">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold">7-Day Consistency</span>
+                      <div className="text-sm sm:text-base font-black text-emerald-400">
+                        {profileData.consistency.consistencyScore7d}%
+                      </div>
+                      <p className="text-[9px] text-gray-500">{profileData.consistency.activeDays7d} / 7 Days Active</p>
+                    </div>
+
+                    <div className="bg-[#0b0417] p-2.5 rounded-xl border border-[#261545] space-y-0.5">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold">30-Day Consistency</span>
+                      <div className="text-sm sm:text-base font-black text-amber-300">
+                        {profileData.consistency.consistencyScore30d}%
+                      </div>
+                      <p className="text-[9px] text-gray-500">{profileData.consistency.activeDays30d} / 30 Days Active</p>
+                    </div>
+
+                    <div className="bg-[#0b0417] p-2.5 rounded-xl border border-[#261545] space-y-0.5">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold">Total Active Days</span>
+                      <div className="text-sm sm:text-base font-black text-purple-300">
+                        {profileData.consistency.totalActiveDaysRecorded || 1} Days
+                      </div>
+                      <p className="text-[9px] text-gray-500">Recorded in Database</p>
+                    </div>
+
+                    <div className="bg-[#0b0417] p-2.5 rounded-xl border border-[#261545] space-y-0.5">
+                      <span className="text-[9px] text-gray-400 uppercase font-bold">Last Activity</span>
+                      <div className="text-xs font-bold text-gray-200 truncate">
+                        {profileData.consistency.lastActiveAt
+                          ? new Date(profileData.consistency.lastActiveAt).toLocaleDateString()
+                          : 'Today'}
+                      </div>
+                      <p className="text-[9px] text-gray-500">
+                        {profileData.consistency.lastActiveAt
+                          ? new Date(profileData.consistency.lastActiveAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : 'Online'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 14-Day Activity Heatmap Matrix Strip */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 uppercase font-bold">
+                      <span>14-Day Daily Return Heatmap (Past 2 Weeks)</span>
+                      <span className="text-emerald-400">🟢 Active &bull; ⚪ Inactive</span>
+                    </div>
+
+                    <div className="grid grid-cols-7 sm:grid-cols-14 gap-1.5">
+                      {(profileData.consistency.matrix14d || []).map((slot, idx) => (
+                        <div
+                          key={idx}
+                          title={`${slot.date} (${slot.dayName}): ${slot.isActive ? 'Active on platform' : 'No visit'}`}
+                          className={`rounded-xl p-1.5 text-center flex flex-col items-center justify-center border transition-all ${
+                            slot.isActive
+                              ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 shadow-sm shadow-emerald-500/20 scale-105'
+                              : 'bg-[#080212] border-[#22123d] text-gray-600 opacity-60'
+                          }`}
+                        >
+                          <span className="text-[8px] font-bold text-gray-400 uppercase">{slot.dayName}</span>
+                          <span className="text-[10px] font-mono font-black">{slot.dayNumber}</span>
+                          <div className={`w-2 h-2 rounded-full mt-0.5 ${slot.isActive ? 'bg-emerald-400 shadow shadow-emerald-400 animate-pulse' : 'bg-gray-700'}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Quick User Action Controls */}
               <div className="flex items-center gap-2 flex-wrap">
                 <button

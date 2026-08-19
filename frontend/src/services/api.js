@@ -77,6 +77,12 @@ export const superAdminAPI = {
     if (endDate) params.append('endDate', endDate);
     return apiCall(`/superad/overview?${params.toString()}`, 'GET');
   },
+  getUsers: ({ search = '', filter = 'ALL' } = {}) => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (filter && filter !== 'ALL') params.append('filter', filter);
+    return apiCall(`/superad/users?${params.toString()}`, 'GET');
+  },
   getUser360: (userId) => apiCall(`/superad/users/${userId}/360`, 'GET'),
   toggleBlockUser: (userId) => apiCall(`/superad/users/${userId}/toggle-block`, 'POST'),
   toggleExcludeUser: (userId) => apiCall(`/superad/users/${userId}/toggle-exclude`, 'POST'),

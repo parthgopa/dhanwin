@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   },
   walletBalance: {
     type: Number,
-    default: 10.00, // ₹10.00 Signup Bonus
+    default: 1.00, // ₹1.00 Signup Bonus
     min: 0,
   },
   role: {
@@ -56,6 +56,21 @@ const userSchema = new mongoose.Schema({
   totalDailyRewardsClaimed: {
     type: Number,
     default: 0,
+  },
+  lastActiveAt: {
+    type: Date,
+    default: Date.now,
+  },
+  activeDays: [{
+    type: String, // YYYY-MM-DD date strings
+  }],
+  loginStreak: {
+    type: Number,
+    default: 1,
+  },
+  maxLoginStreak: {
+    type: Number,
+    default: 1,
   },
 }, { timestamps: true });
 

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
+import { recordUserActivity } from '../utils/userConsistency.js';
 
 export const verifyToken = async (req, res, next) => {
   try {
@@ -26,6 +27,11 @@ export const verifyToken = async (req, res, next) => {
         code: 'SESSION_TERMINATED',
         message: 'You have been logged out because your account was accessed on another device.',
       });
+    }
+
+    // Record daily activity & streak tracking
+    if (user.role === 'USER') {
+      recordUserActivity(user);
     }
 
     req.user = user;

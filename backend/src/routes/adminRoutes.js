@@ -7,6 +7,7 @@ import { WinGoSession } from '../models/WinGoSession.js';
 import { WinGoBet } from '../models/WinGoBet.js';
 import { BetHistory } from '../models/BetHistory.js';
 import { getLivePlayersStats } from '../socket/gameSocket.js';
+import { computeUserConsistency } from '../utils/userConsistency.js';
 import mongoose from 'mongoose';
 
 const router = express.Router();
@@ -421,11 +422,16 @@ router.get('/consolidated-analytics', async (req, res) => {
   }
 });
 
-// 5. List All Platform Users with Exclusion Status
+// 5. List All Platform Users with Exclusion Status & Consistency Telemetry
 router.get('/users', async (req, res) => {
   try {
     const users = await User.find().select('-passwordHash').sort({ createdAt: -1 });
-    res.json({ users });
+    const enrichedUsers = users.map((u) => {
+      const uObj = u.toObject();
+      uObj.consistency = computeUserConsistency(u);
+      return uObj;
+    });
+    res.json({ users: enrichedUsers });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching users', error: error.message });
   }

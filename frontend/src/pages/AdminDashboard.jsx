@@ -1076,7 +1076,7 @@ export const AdminDashboard = ({ onNavigate }) => {
                   <table className="w-full text-left text-xs font-mono">
                     <thead className="bg-[#0b0e14] border-b border-[#232b3b] text-gray-400 uppercase font-bold text-[10px]">
                       <tr>
-                        {['Username', 'Phone / Email', 'Role', 'Balance', 'Stats', 'Status', 'Actions'].map(h => (
+                        {['Username', 'Phone / Email', 'Role', 'Balance', 'Consistency (7D Matrix)', 'Stats', 'Status', 'Actions'].map(h => (
                           <th key={h} className="p-3">{h}</th>
                         ))}
                       </tr>
@@ -1101,6 +1101,34 @@ export const AdminDashboard = ({ onNavigate }) => {
                           <td className="p-3 font-bold text-amber-400">{u.role}</td>
                           <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap">₹{Math.round(u.walletBalance || 0).toLocaleString('en-IN')}</td>
                           
+                          {/* Consistency & 7D Matrix */}
+                          <td className="p-3 font-sans whitespace-nowrap">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.2 rounded-full text-[8px] font-black border ${u.consistency?.tierColor || 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                                  {u.consistency?.tierBadge || '🎲 Regular'}
+                                </span>
+                                <span className="text-[9px] font-mono font-bold text-amber-300">
+                                  🔥 {u.consistency?.loginStreak || 1}d
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {(u.consistency?.matrix7d || []).map((slot, sIdx) => (
+                                  <div
+                                    key={sIdx}
+                                    title={`${slot.date} (${slot.dayName}): ${slot.isActive ? 'Active' : 'No visit'}`}
+                                    className={`w-2 h-2 rounded-full ${
+                                      slot.isActive ? 'bg-emerald-400 shadow shadow-emerald-400' : 'bg-gray-800 border border-gray-700'
+                                    }`}
+                                  />
+                                ))}
+                                <span className="text-[8px] text-gray-400 font-mono ml-0.5">
+                                  {u.consistency?.activeDays7d || 0}/7d
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
                           {/* Test Account Toggle */}
                           <td className="p-3 font-sans whitespace-nowrap">
                             <button

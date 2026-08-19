@@ -9,6 +9,11 @@ import { WinGoBet } from '../models/WinGoBet.js';
 import { SystemSetting } from '../models/SystemSetting.js';
 import { verifyToken, verifyAdmin } from '../middleware/auth.js';
 import { emitToUser } from '../socket/gameSocket.js';
+import {
+  computeUserConsistency,
+  computePlatformConsistencySummary,
+  getDateString,
+} from '../utils/userConsistency.js';
 
 const router = express.Router();
 
@@ -59,7 +64,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: adminUser._id, username: adminUser.username, role: adminUser.role, sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: '2d' }
     );
 
     res.json({
@@ -305,7 +310,18 @@ router.get('/overview', verifyToken, verifySuperAdmin, async (req, res) => {
       0
     );
 
-    // ── 7. Global Settings & Risk Alerts ───────────────────────────────────
+    // ── 7.5. Player Return Consistency & Retention Telemetry ───────────────
+    const consistencyUsers = await User.find({ _id: { $nin: excludedUserIds } }).select(
+      '_id username activeDays lastActiveAt createdAt lastDailyRewardClaim loginStreak maxLoginStreak'
+    );
+    const usersWithConsistency = consistencyUsers.map((u) => ({
+      _id: u._id,
+      username: u.username,
+      consistency: computeUserConsistency(u),
+    }));
+    const platformConsistency = computePlatformConsistencySummary(usersWithConsistency);
+
+    // ── 8. Global Settings & Risk Alerts ───────────────────────────────────
     const settings = await SystemSetting.getGlobal();
     const activeRiskAlerts = (settings.riskAlerts || []).filter((a) => !a.isDismissed).slice(0, 20);
 
@@ -318,6 +334,7 @@ router.get('/overview', verifyToken, verifySuperAdmin, async (req, res) => {
         users: newUsers,
         totalRegistered: totalUsersCount,
       },
+      platformConsistency,
       financials: {
         totalApprovedDeposits: Math.round(totalApprovedDeposits),
         totalApprovedWithdrawals: Math.round(totalApprovedWithdrawals),
@@ -357,6 +374,52 @@ router.get('/overview', verifyToken, verifySuperAdmin, async (req, res) => {
   }
 });
 
+// 2.5. List All Users with Deep Consistency & Retention Metrics (/api/superad/users)
+router.get('/users', verifyToken, verifySuperAdmin, async (req, res) => {
+  try {
+    const { search = '', filter = 'ALL' } = req.query;
+    const query = {};
+
+    if (search) {
+      const clean = search.trim();
+      query.$or = [
+        { username: { $regex: clean, $options: 'i' } },
+        { phone: { $regex: clean, $options: 'i' } },
+        { email: { $regex: clean, $options: 'i' } },
+      ];
+    }
+
+    if (filter === 'BLOCKED') query.isBlocked = true;
+    if (filter === 'EXCLUDED') query.isExcludedFromStats = true;
+
+    const users = await User.find(query).select('-passwordHash').sort({ createdAt: -1 });
+
+    // Enrich users with consistency telemetry
+    let enriched = users.map((u) => {
+      const uObj = u.toObject();
+      uObj.consistency = computeUserConsistency(u);
+      return uObj;
+    });
+
+    // Filter by loyalty tier if requested
+    if (filter === 'DAILY_VIP') {
+      enriched = enriched.filter((u) => u.consistency?.loyaltyTier === 'DAILY_VIP');
+    } else if (filter === 'FREQUENT') {
+      enriched = enriched.filter((u) => u.consistency?.loyaltyTier === 'FREQUENT');
+    } else if (filter === 'OCCASIONAL') {
+      enriched = enriched.filter((u) => u.consistency?.loyaltyTier === 'OCCASIONAL');
+    } else if (filter === 'DORMANT') {
+      enriched = enriched.filter((u) => u.consistency?.loyaltyTier === 'DORMANT');
+    } else if (filter === 'HIGH_BALANCE') {
+      enriched = enriched.filter((u) => (Number(u.walletBalance) || 0) >= 100);
+    }
+
+    res.json({ success: true, count: enriched.length, users: enriched });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users with consistency', error: error.message });
+  }
+});
+
 // 3. User 360 Deep Profile Inspection (/api/superad/users/:userId/360)
 router.get('/users/:userId/360', verifyToken, verifySuperAdmin, async (req, res) => {
   try {
@@ -374,6 +437,14 @@ router.get('/users/:userId/360', verifyToken, verifySuperAdmin, async (req, res)
 
     // Fetch all Transactions
     const transactions = await WalletTransaction.find({ userId }).sort({ createdAt: -1 }).limit(100);
+
+    // Extract distinct historical active dates for complete player history
+    const historicalDates = new Set();
+    aviatorBets.forEach((b) => b.createdAt && historicalDates.add(getDateString(b.createdAt)));
+    wingoBets.forEach((b) => b.createdAt && historicalDates.add(getDateString(b.createdAt)));
+    transactions.forEach((t) => t.createdAt && historicalDates.add(getDateString(t.createdAt)));
+
+    const consistency = computeUserConsistency(user, historicalDates);
 
     // Aggregate lifetime statistics
     let totalDeposited = 0;
@@ -442,6 +513,7 @@ router.get('/users/:userId/360', verifyToken, verifySuperAdmin, async (req, res)
         isExcludedFromStats: user.isExcludedFromStats,
         createdAt: user.createdAt,
       },
+      consistency,
       summary: {
         walletBalance: Math.round(user.walletBalance || 0),
         totalDeposited: Math.round(totalDeposited),
