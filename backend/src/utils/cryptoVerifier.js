@@ -252,7 +252,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
   }
 
   const target = adminAddress.toLowerCase();
-  const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET === 'true';
+  const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET !== 'false';
 
   const endpoints = [
     { name: 'Polygon', url: `https://polygon.blockscout.com/api/v2/addresses/${target}` },
@@ -272,7 +272,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
 
   const detectedHashes = new Set();
   const now = Date.now();
-  const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000; // Look back up to 24 hours for uncredited deposits
 
   await Promise.allSettled(
     endpoints.map(async (ep) => {
@@ -291,7 +291,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
               item.value && item.value !== '0'
             ) {
               const txTime = item.timestamp ? new Date(item.timestamp).getTime() : now;
-              if (now - txTime <= FIFTEEN_MINUTES_MS) {
+              if (now - txTime <= MAX_AGE_MS) {
                 detectedHashes.add(item.hash.toLowerCase());
               }
             }
@@ -307,7 +307,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
               item.total?.value && item.total.value !== '0'
             ) {
               const txTime = item.timestamp ? new Date(item.timestamp).getTime() : now;
-              if (now - txTime <= FIFTEEN_MINUTES_MS) {
+              if (now - txTime <= MAX_AGE_MS) {
                 detectedHashes.add(hash.toLowerCase());
               }
             }
@@ -451,7 +451,7 @@ export const verifyBlockchainTransaction = async (txHash, preferredChain = 'bsc'
     validTargets.add(expectedTargetAddress.trim().toLowerCase());
   }
 
-  const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET === 'true';
+  const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET !== 'false';
 
   // Build list of chains to scan: preferred chain first, then all remaining chains
   const chainsToScan = [];
@@ -471,10 +471,11 @@ export const verifyBlockchainTransaction = async (txHash, preferredChain = 'bsc'
 
   for (const chainKey of chainsToScan) {
     const chain = CHAINS_CONFIG[chainKey];
-    if (!chain) continue;
+    if (!chain || chain.isTron || !Array.isArray(chain.rpcUrls)) continue;
 
-    // Security Gate: Reject/skip testnets if ALLOW_CRYPTO_TESTNET is not explicitly enabled
-    if (chain.isTestnet && !allowTestnet) {
+    // Security Gate: Reject/skip testnets if ALLOW_CRYPTO_TESTNET is explicitly disabled
+    // (Never skip if user explicitly selected this testnet chain)
+    if (chain.isTestnet && !allowTestnet && preferredChain !== chainKey) {
       continue;
     }
 

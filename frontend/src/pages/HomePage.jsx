@@ -49,7 +49,7 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth, onOpenSideba
             【💰 Notice】
           </span>
           <span className="text-gray-300 truncate text-[11px] sm:text-xs">
-            UPI Deposits (Min ₹100) added in 5-6 hours. Withdrawals (Min ₹300, Max ₹5,000)!
+            USDT Deposits (Min 1 USDT) auto-credited in seconds! Withdrawals (Min ₹300, Max ₹5,000)!
           </span>
         </div>
         <button
@@ -81,12 +81,17 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth, onOpenSideba
               <ArrowDownLeft className="w-4 h-4" />
             </div>
             <div className="space-y-1">
-              <div className="font-extrabold text-amber-400 text-xs">UPI & QR Deposit</div>
+              <div className="font-extrabold text-amber-400 text-xs flex items-center gap-1.5 flex-wrap">
+                <span>USDT Crypto Deposit</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                  AUTO-CREDIT
+                </span>
+              </div>
               <p className="text-[11px] text-gray-300 leading-tight">
-                Minimum Deposit is <strong>₹100</strong> with <strong>0% fee</strong>.
+                Minimum Deposit is <strong>1 USDT</strong> (≈ ₹92) with <strong>0% fee</strong>.
               </p>
-              <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-[10.5px] text-amber-300 font-bold leading-tight">
-                📌 Note: Deposit will be verified & added to your account in <strong>5-6 hours</strong> after submitting the correct 12-digit UTR.
+              <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[10.5px] text-emerald-300 font-bold leading-tight">
+                ⚡ Instant: Automatically detected & credited in <strong>15–30 seconds</strong> via TRON (TRC-20), BSC (BEP-20), Polygon & more!
               </div>
             </div>
           </div>

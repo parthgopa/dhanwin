@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { User } from '../models/User.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
-import { CHAINS_CONFIG, verifyBlockchainTransaction } from '../utils/cryptoVerifier.js';
+import { CHAINS_CONFIG, verifyBlockchainTransaction, scanIncomingTransactions } from '../utils/cryptoVerifier.js';
 import { getIO } from '../socket/gameSocket.js';
 import { getLiveUsdtInrRate } from '../utils/exchangeRates.js';
 
@@ -137,7 +137,7 @@ export const scanBlockchainDepositBlocks = async (io) => {
       usersWithAddresses.map((u) => u.cryptoDepositAddress.toLowerCase())
     );
 
-    const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET === 'true';
+    const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET !== 'false';
 
     // Prioritize active networks: BSC, Polygon, Arbitrum, Base, Sepolia (if enabled)
     const priorityChains = ['bsc', 'polygon', 'arbitrum', 'base'];
@@ -147,7 +147,7 @@ export const scanBlockchainDepositBlocks = async (io) => {
 
     for (const chainKey of priorityChains) {
       const chain = CHAINS_CONFIG[chainKey];
-      if (!chain || (chain.isTestnet && !allowTestnet)) continue;
+      if (!chain || chain.isTron || !Array.isArray(chain.rpcUrls) || (chain.isTestnet && !allowTestnet)) continue;
 
       const rpcUrl = chain.rpcUrls[0];
       if (!rpcUrl) continue;
@@ -197,6 +197,20 @@ export const scanBlockchainDepositBlocks = async (io) => {
         }
       } catch (chainErr) {
         // Silently skip if RPC provider timed out on this tick
+      }
+    }
+
+    // Scan active EVM user deposit addresses via Blockscout explorer APIs (catches native ETH/BNB/MATIC + token transfers)
+    if (usersWithAddresses && usersWithAddresses.length > 0) {
+      for (const u of usersWithAddresses.slice(0, 10)) {
+        try {
+          const evmHashes = await scanIncomingTransactions(u.cryptoDepositAddress);
+          for (const eh of evmHashes) {
+            await creditDetectedDeposit(eh, allowTestnet ? 'sepolia' : 'polygon', u.cryptoDepositAddress, io);
+          }
+        } catch {
+          // Silently continue
+        }
       }
     }
 
