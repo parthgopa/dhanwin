@@ -18,13 +18,13 @@ const betHistorySchema = new mongoose.Schema({
   },
   gameType: {
     type: String,
-    enum: ['AVIATOR', 'CHICKEN_ROAD'],
+    enum: ['AVIATOR', 'CHICKEN_ROAD', 'VORTEX', 'WINGO'],
     required: true,
   },
   betAmount: {
     type: Number,
     required: true,
-    min: 1,
+    min: 0,
   },
   autoCashOut: {
     type: Number,
@@ -40,7 +40,7 @@ const betHistorySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PLACED', 'CASHOUT', 'LOST'],
+    enum: ['PLACED', 'CASHOUT', 'WON', 'LOST', 'PART_PAYOUT'],
     default: 'PLACED',
   },
   stepReached: {

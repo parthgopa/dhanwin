@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, Phone, Mail, User as UserIcon, ArrowRight, ShieldCheck, KeyRound, Gift, Eye, EyeOff, CheckCircle2, RotateCw } from 'lucide-react';
+import { X, Lock, Phone, Mail, User as UserIcon, ArrowRight, ShieldCheck, KeyRound, Gift, Eye, EyeOff, CheckCircle2, RotateCw, Sparkles } from 'lucide-react';
 import { authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -107,7 +107,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
         tempToken,
       });
       loginUser(res.user, res.token);
-      showToast('Welcome to Dhanwin! ₹1 Signup Bonus Credited!', 'success');
+      showToast('Welcome to Dhanwin! Your account is ready.', 'success');
       resetAndClose();
     } catch (err) {
       showToast(err.message, 'error');
@@ -154,7 +154,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             </h3>
             <p className="text-xs text-gray-400">
               {isRegister
-                ? (regStep === 2 ? 'Enter 6-digit code sent to your email' : 'Register & Get Instant ₹1 Bonus')
+                ? (regStep === 2 ? 'Enter 6-digit code sent to your email' : 'Create an Account & Start Playing')
                 : 'Login to Your Gaming Wallet'}
             </p>
           </div>
@@ -219,8 +219,8 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
         {isRegister && regStep === 1 && (
           <form onSubmit={handleRequestOTP} className="space-y-3">
             <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2 text-xs text-amber-300">
-              <Gift className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Sign up today & receive <strong>₹1.00 Bonus</strong> automatically!</span>
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Instant 24/7 Deposits & Fast Payouts!</span>
             </div>
 
             {/* Username Input */}

@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { AviatorGame } from './components/AviatorGame';
 import { ChickenRoadGame } from './components/ChickenRoadGame';
 import { WinGoGame } from './components/WinGoGame';
+import { VortexGame } from './components/VortexGame';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminLogin } from './pages/AdminLogin';
 import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
@@ -20,12 +21,13 @@ import { walletAPI } from './services/api';
 function MainApp() {
   const { user, notification, depositPopup } = useAuth();
   
-  // Isolated Route/View Manager: 'home' | 'aviator' | 'chicken' | 'wingo' | 'admin' | 'admin-login' | 'superad' | 'superad-login'
+  // Isolated Route/View Manager: 'home' | 'aviator' | 'chicken' | 'wingo' | 'vortex' | 'admin' | 'admin-login' | 'superad' | 'superad-login'
   const [activeTab, setActiveTab] = useState(() => {
     const path = window.location.pathname;
     if (path === '/game/aviator') return 'aviator';
     if (path === '/game/chicken') return 'chicken';
     if (path === '/game/wingo') return 'wingo';
+    if (path === '/game/vortex') return 'vortex';
     if (path === '/admin') return 'admin';
     if (path === '/admin-login') return 'admin-login';
     if (path === '/superad') return 'superad';
@@ -84,6 +86,7 @@ function MainApp() {
     if (tab === 'aviator') window.history.pushState({}, '', '/game/aviator');
     else if (tab === 'chicken') window.history.pushState({}, '', '/game/chicken');
     else if (tab === 'wingo') window.history.pushState({}, '', '/game/wingo');
+    else if (tab === 'vortex') window.history.pushState({}, '', '/game/vortex');
     else if (tab === 'admin') window.history.pushState({}, '', '/admin');
     else if (tab === 'admin-login') window.history.pushState({}, '', '/admin-login');
     else if (tab === 'superad') window.history.pushState({}, '', '/superad');
@@ -97,6 +100,7 @@ function MainApp() {
       if (path === '/game/aviator') setActiveTab('aviator');
       else if (path === '/game/chicken') setActiveTab('chicken');
       else if (path === '/game/wingo') setActiveTab('wingo');
+      else if (path === '/game/vortex') setActiveTab('vortex');
       else if (path === '/admin') setActiveTab('admin');
       else if (path === '/admin-login') setActiveTab('admin-login');
       else if (path === '/superad') setActiveTab('superad');
@@ -237,6 +241,15 @@ function MainApp() {
         {/* ISOLATED WINGO ROUTE */}
         {activeTab === 'wingo' && (
           <WinGoGame
+            onOpenDeposit={() => setIsDepositOpen(true)}
+            onOpenAuth={handleOpenAuth}
+          />
+        )}
+
+        {/* ISOLATED VORTEX ROUTE */}
+        {activeTab === 'vortex' && (
+          <VortexGame
+            onBack={() => navigateTo('home')}
             onOpenDeposit={() => setIsDepositOpen(true)}
             onOpenAuth={handleOpenAuth}
           />

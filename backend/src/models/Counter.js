@@ -1,16 +1,24 @@
 import mongoose from 'mongoose';
 
-const counterSchema = new mongoose.Schema({
-  key: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
+const counterSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    key: {
+      type: String,
+      index: true,
+    },
+    seq: {
+      type: Number,
+      default: 0,
+    },
   },
-  seq: {
-    type: Number,
-    default: 0,
-  },
-}, { timestamps: true });
+  {
+    strict: false,
+    timestamps: true,
+  }
+);
 
-export const Counter = mongoose.model('Counter', counterSchema);
+export const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
+export default Counter;

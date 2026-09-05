@@ -12,6 +12,8 @@ import superAdminRoutes from './routes/superAdminRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
 import winGoRoutes from './routes/winGoRoutes.js';
 import { initGameSockets } from './socket/gameSocket.js';
+import { startCryptoDepositWorker } from './workers/cryptoDepositWorker.js';
+import { startExchangeRateAutoUpdater } from './utils/exchangeRates.js';
 
 dotenv.config();
 
@@ -19,6 +21,13 @@ const app = express();
 const server = http.createServer(app);
 
 // Middlewares
+app.set('etag', false);
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 app.use(cors());
 app.use(express.json());
 
@@ -81,7 +90,10 @@ const PORT = process.env.PORT || 5000;
 connectDB().then(async () => {
   await seedDefaultAdmin();
 
-  initGameSockets(server);
+  const io = initGameSockets(server);
+  app.set('io', io);
+  startCryptoDepositWorker(io);
+  startExchangeRateAutoUpdater();
 
   server.listen(PORT, () => {
     console.log(`[Dhanwin Backend] Server running on http://localhost:${PORT}`);

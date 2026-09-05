@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   },
   walletBalance: {
     type: Number,
-    default: 1.00, // ₹1.00 Signup Bonus
+    default: 0,
     min: 0,
   },
   role: {
@@ -72,6 +72,27 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 1,
   },
+  cryptoDepositIndex: {
+    type: Number,
+    unique: true,
+    sparse: true,
+  },
+  cryptoDepositAddress: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true,
+    index: true,
+  },
+  tronDepositAddress: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    index: true,
+  },
 }, { timestamps: true });
 
 export const User = mongoose.model('User', userSchema);
+export default User;

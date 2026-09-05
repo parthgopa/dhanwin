@@ -9,6 +9,12 @@ import {
   generateCrashPoint,
 } from '../utils/provablyFair.js';
 import { startWinGoEngine, initWinGoSocketHandlers } from './winGoEngine.js';
+import {
+  handleInitVortexSession,
+  handleVortexSpin,
+  handleVortexPartPayout,
+  handleVortexCashout,
+} from '../controllers/vortexEngine.js';
 
 // --- AVIATOR IN-MEMORY STATE ENGINE ---
 let aviatorState = {
@@ -481,6 +487,41 @@ export const initGameSockets = (server) => {
       });
     });
 
+    // ── VORTEX ELEMENTAL CASINO GAME HANDLERS ──────────────────────────────
+    socket.on('vortex:init', (data) => {
+      const uid = socket.user?._id?.toString() || data?.userId;
+      if (uid) {
+        handleInitVortexSession(socket, uid);
+      }
+    });
+
+    socket.on('vortex:spin', (data) => {
+      const uid = socket.user?._id?.toString() || data?.userId;
+      if (uid) {
+        handleVortexSpin(socket, io, uid, data);
+      } else {
+        socket.emit('vortex:error', { message: 'Please login to spin in Vortex' });
+      }
+    });
+
+    socket.on('vortex:part_payout', (data) => {
+      const uid = socket.user?._id?.toString() || data?.userId;
+      if (uid) {
+        handleVortexPartPayout(socket, io, uid);
+      } else {
+        socket.emit('vortex:error', { message: 'Authentication required' });
+      }
+    });
+
+    socket.on('vortex:cashout', (data) => {
+      const uid = socket.user?._id?.toString() || data?.userId;
+      if (uid) {
+        handleVortexCashout(socket, io, uid);
+      } else {
+        socket.emit('vortex:error', { message: 'Authentication required' });
+      }
+    });
+
     socket.on('disconnect', () => { });
   });
 };
@@ -767,4 +808,6 @@ const startAviatorLoop = (io) => {
   forceCrashCallback = triggerCrash;
 
   runNextRound();
+
+  return io;
 };

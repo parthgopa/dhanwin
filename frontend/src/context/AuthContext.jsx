@@ -156,6 +156,18 @@ export const AuthProvider = ({ children }) => {
     setUser((prev) => (prev ? { ...prev, walletBalance: newBalance } : null));
   };
 
+  const refreshUser = async () => {
+    try {
+      const data = await authAPI.getMe();
+      if (data?.user) {
+        setUser(data.user);
+        return data.user;
+      }
+    } catch (err) {
+      console.warn('[refreshUser error]', err.message);
+    }
+  };
+
   const showToast = (message, type = 'info') => {
     setNotification({ message, type });
     setTimeout(() => {
@@ -175,6 +187,7 @@ export const AuthProvider = ({ children }) => {
         loginUser,
         logout,
         updateBalance,
+        refreshUser,
         showToast,
       }}
     >

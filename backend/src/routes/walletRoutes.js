@@ -6,13 +6,356 @@ import { WalletTransaction } from '../models/WalletTransaction.js';
 import { SystemSetting } from '../models/SystemSetting.js';
 import { BetHistory } from '../models/BetHistory.js';
 import { WinGoBet } from '../models/WinGoBet.js';
+import {
+  verifyBlockchainTransaction,
+  scanIncomingTransactions,
+  ADMIN_CRYPTO_WALLET,
+  CHAINS_CONFIG,
+} from '../utils/cryptoVerifier.js';
+import { getOrCreateUserDepositAddress } from '../utils/hdWallet.js';
+import { getLiveUsdtInrRate } from '../utils/exchangeRates.js';
 
 const router = express.Router();
+const inFlightVerificationHashes = new Set();
 
 // ── MINIMUM & MAXIMUM LIMITS CONFIGURATION ──────────────────────────────────────
 const MIN_DEPOSIT_AMOUNT = 100;
 const MIN_WITHDRAWAL_AMOUNT = 300;
 const MAX_WITHDRAWAL_AMOUNT = 5000;
+
+// 0. Crypto Deposit Configuration
+router.get('/deposit/crypto/config', (req, res) => {
+  res.json({
+    adminAddress: ADMIN_CRYPTO_WALLET,
+    usdtInrRate: getLiveUsdtInrRate(),
+    supportedChains: CHAINS_CONFIG,
+    minDepositUSDT: 0.0001,
+  });
+});
+
+// 0.1. Get or Generate Authenticated User's Dedicated HD Deposit Address
+router.get('/deposit/crypto/my-address', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { address, checksumAddress, tronAddress, index } = await getOrCreateUserDepositAddress(user);
+
+    res.json({
+      success: true,
+      depositAddress: address,
+      checksumAddress,
+      tronDepositAddress: tronAddress || user.tronDepositAddress,
+      index,
+      adminAddress: ADMIN_CRYPTO_WALLET,
+      usdtInrRate: getLiveUsdtInrRate(),
+      supportedChains: CHAINS_CONFIG,
+      minDepositUSDT: 0.0001,
+    });
+  } catch (err) {
+    console.error('[Get My Crypto Address Error]', err);
+    res.status(500).json({ message: 'Failed to retrieve dedicated deposit address.' });
+  }
+});
+
+// 0.5. Verify On-Chain Crypto Deposit (Trust Wallet / WalletConnect / Web3)
+router.post('/deposit/crypto/verify-tx', verifyToken, async (req, res) => {
+  try {
+    const { txHash, chain = 'bsc' } = req.body;
+    if (!txHash) {
+      return res.status(400).json({ message: 'Transaction hash is required.' });
+    }
+
+    let cleanTxHash = txHash.trim();
+    if (chain !== 'tron' && cleanTxHash.startsWith('0x')) {
+      cleanTxHash = cleanTxHash.toLowerCase();
+    } else if (cleanTxHash.startsWith('0x') || cleanTxHash.startsWith('0X')) {
+      cleanTxHash = cleanTxHash.slice(2).toLowerCase();
+    } else {
+      cleanTxHash = cleanTxHash.toLowerCase();
+    }
+
+    // Check duplicate txHash in DB to prevent double spending/replays
+    const existingTx = await WalletTransaction.findOne({
+      $or: [
+        { utrNumber: cleanTxHash },
+        { utrNumber: '0x' + cleanTxHash },
+      ],
+    });
+    if (existingTx) {
+      return res.status(400).json({
+        message: 'This blockchain transaction hash has already been credited or submitted.',
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Ensure user has a deposit address
+    if (!user.cryptoDepositAddress || !user.tronDepositAddress) {
+      await getOrCreateUserDepositAddress(user);
+    }
+
+    const isTron = chain === 'tron' || (cleanTxHash.length === 64 && !txHash.trim().startsWith('0x'));
+    const userTarget = isTron ? (user.tronDepositAddress || '') : (user.cryptoDepositAddress || '').toLowerCase();
+    const adminTarget = ADMIN_CRYPTO_WALLET.toLowerCase();
+
+    // Verify on blockchain targeting user's personal address or admin fallback
+    const verified = await verifyBlockchainTransaction(cleanTxHash, chain, userTarget);
+    if (!verified || !verified.verified) {
+      return res.status(400).json({ message: 'Blockchain transaction could not be verified.' });
+    }
+
+    // Security check: Ensure the transaction recipient is THIS user's address or admin wallet
+    const recipient = verified.to;
+    const isRecipientMatch = isTron
+      ? (recipient === user.tronDepositAddress)
+      : (recipient.toLowerCase() === userTarget || recipient.toLowerCase() === adminTarget);
+
+    if (!isRecipientMatch) {
+      return res.status(400).json({
+        message: 'This transaction was sent to a different deposit address and cannot be claimed by your account.',
+      });
+    }
+
+    // Convert USDT to INR credits via live exchange rate
+    const USDT_INR_RATE = getLiveUsdtInrRate();
+    const rawInr = verified.amountUSDT * USDT_INR_RATE;
+    const inrAmount = Number((Math.max(0.01, rawInr)).toFixed(2));
+
+    // Create APPROVED WalletTransaction
+    const transaction = await WalletTransaction.create({
+      userId: user._id,
+      type: 'DEPOSIT',
+      amount: inrAmount,
+      status: 'APPROVED',
+      utrNumber: cleanTxHash,
+      adminNote: `Auto-Verified Web3 Deposit (${verified.chainName}) • ${verified.amountUSDT} USDT (User #${user.cryptoDepositIndex || 0})`,
+      paymentDetails: {
+        accountHolderName: `Web3: ${verified.from.slice(0, 8)}...${verified.from.slice(-6)}`,
+        accountNumber: cleanTxHash,
+        upiId: verified.to,
+        qrReference: verified.contract,
+      },
+      processedAt: new Date(),
+    });
+
+    // Atomically update user balance
+    user.walletBalance = Math.round(((user.walletBalance || 0) + inrAmount) * 100) / 100;
+    await user.save();
+
+    const io = req.app.get('io');
+    const populatedTx = await WalletTransaction.findById(transaction._id).populate(
+      'userId',
+      'username phone walletBalance'
+    );
+
+    if (io) {
+      const depositPayload = {
+        amount: inrAmount,
+        newBalance: user.walletBalance,
+        amountUSDT: verified.amountUSDT,
+        txHash: cleanTxHash,
+        chain: verified.chainName,
+        message: `Payment Confirmed on Blockchain! ₹${inrAmount.toLocaleString('en-IN')} (${verified.amountUSDT} USDT) credited.`,
+        transaction: populatedTx,
+      };
+
+      io.to(`user_${user._id}`).emit('deposit_approved', depositPayload);
+      io.to(user._id.toString()).emit('deposit_approved', depositPayload);
+      io.emit(`deposit_approved_${user._id}`, depositPayload);
+
+      io.to(`user_${user._id}`).emit('wallet:updated', {
+        balance: user.walletBalance,
+        transaction: populatedTx,
+      });
+      io.emit(`wallet:updated:${user._id}`, { balance: user.walletBalance });
+
+      // Emit to admin portal
+      io.to('admin_room').emit('admin:new_transaction', { transaction: populatedTx });
+      io.emit('admin:new_transaction', { transaction: populatedTx });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Payment Confirmed on Blockchain! ₹${inrAmount.toLocaleString('en-IN')} (${verified.amountUSDT} USDT) credited to your wallet balance.`,
+      transaction: populatedTx,
+      walletBalance: user.walletBalance,
+      amountCredited: inrAmount,
+      amountUSDT: verified.amountUSDT,
+      txHash: cleanTxHash,
+      chain: verified.chainName,
+    });
+  } catch (error) {
+    console.error('[Crypto Deposit Verification Error]', error);
+    res.status(400).json({
+      message: error.message || 'Verification failed on blockchain.',
+      error: error.message,
+    });
+  }
+});
+
+// 0.6. Automatically Scan & Auto-Credit Incoming Crypto Deposit for Authenticated User
+router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (!user.cryptoDepositAddress || !user.tronDepositAddress) {
+      await getOrCreateUserDepositAddress(user);
+    }
+
+    const preferredChain = req.query.chain || 'bsc';
+    const isTron = preferredChain === 'tron';
+    const scanAddress = isTron ? user.tronDepositAddress : user.cryptoDepositAddress;
+
+    if (!scanAddress) {
+      return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
+    }
+
+    // Scan incoming transactions specifically for this user's dedicated address
+    const detectedHashes = await scanIncomingTransactions(scanAddress);
+    if (!detectedHashes || detectedHashes.length === 0) {
+      return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
+    }
+
+    // Check which hashes have already been credited in DB
+    const creditedTxs = await WalletTransaction.find({
+      $or: [
+        { utrNumber: { $in: detectedHashes } },
+        { utrNumber: { $in: detectedHashes.map((h) => '0x' + h) } },
+        { utrNumber: { $in: detectedHashes.map((h) => h.replace(/^0x/, '')) } },
+      ],
+    }).select('utrNumber');
+
+    const creditedSet = new Set(creditedTxs.map((t) => t.utrNumber.toLowerCase().replace(/^0x/, '')));
+    const uncreditedHashes = detectedHashes.filter((h) => !creditedSet.has(h.toLowerCase().replace(/^0x/, '')));
+
+    if (uncreditedHashes.length === 0) {
+      return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
+    }
+
+    // Verify the newest uncredited transaction targeting THIS user's address
+    const targetHash = uncreditedHashes[0].toLowerCase();
+    if (inFlightVerificationHashes.has(targetHash)) {
+      return res.json({ success: true, credited: false, message: 'Transaction verification in progress...' });
+    }
+
+    inFlightVerificationHashes.add(targetHash);
+    let transaction;
+    let inrAmount = 0;
+    let verified = null;
+
+    try {
+      verified = await verifyBlockchainTransaction(targetHash, preferredChain, scanAddress);
+
+      if (!verified || !verified.verified) {
+        return res.json({ success: true, credited: false, message: 'Transaction pending...' });
+      }
+
+      // Double-check recipient ownership
+      const recipient = verified.to;
+      const isRecipientMatch = isTron
+        ? (recipient === user.tronDepositAddress)
+        : (recipient.toLowerCase() === (user.cryptoDepositAddress || '').toLowerCase() || recipient.toLowerCase() === ADMIN_CRYPTO_WALLET.toLowerCase());
+
+      if (!isRecipientMatch) {
+        return res.json({ success: true, credited: false, message: 'Transaction target mismatch.' });
+      }
+
+      // Convert USDT to INR via live exchange rate
+      const USDT_INR_RATE = getLiveUsdtInrRate();
+      const rawInr = verified.amountUSDT * USDT_INR_RATE;
+      inrAmount = Number((Math.max(0.01, rawInr)).toFixed(2));
+
+      transaction = await WalletTransaction.create({
+        userId: user._id,
+        type: 'DEPOSIT',
+        amount: inrAmount,
+        status: 'APPROVED',
+        utrNumber: targetHash,
+        adminNote: `Auto-Detected HD Web3 Deposit (${verified.chainName}) • ${verified.amountUSDT} USDT (User #${user.cryptoDepositIndex || 0})`,
+        paymentDetails: {
+          accountHolderName: `Web3: ${verified.from.slice(0, 8)}...${verified.from.slice(-6)}`,
+          accountNumber: targetHash,
+          upiId: verified.to,
+          qrReference: verified.contract,
+        },
+        processedAt: new Date(),
+      });
+
+      user.walletBalance = Math.round(((user.walletBalance || 0) + inrAmount) * 100) / 100;
+      await user.save();
+    } catch (createErr) {
+      if (createErr.code === 11000) {
+        // Already created by parallel request or background worker
+        const freshUser = await User.findById(user._id);
+        const existingTx = await WalletTransaction.findOne({ utrNumber: targetHash });
+        return res.json({
+          success: true,
+          credited: true,
+          message: 'Payment already verified and credited to wallet balance.',
+          transaction: existingTx,
+          walletBalance: freshUser?.walletBalance,
+          amountCredited: existingTx?.amount || inrAmount,
+          amountUSDT: verified?.amountUSDT,
+          txHash: targetHash,
+          chain: verified?.chainName || 'Blockchain',
+        });
+      }
+      throw createErr;
+    } finally {
+      inFlightVerificationHashes.delete(targetHash);
+    }
+
+    const io = req.app.get('io');
+    const populatedTx = await WalletTransaction.findById(transaction._id).populate(
+      'userId',
+      'username phone walletBalance'
+    );
+
+    if (io) {
+      io.to(`user_${user._id}`).emit('deposit_approved', {
+        amount: inrAmount,
+        newBalance: user.walletBalance,
+        amountUSDT: verified.amountUSDT,
+        txHash: targetHash,
+        chain: verified.chainName,
+        message: `Payment Auto-Detected! ₹${inrAmount.toLocaleString('en-IN')} (${verified.amountUSDT} USDT) credited to your balance.`,
+        transaction: populatedTx,
+      });
+      io.to(`user_${user._id}`).emit('wallet:updated', {
+        balance: user.walletBalance,
+        transaction: populatedTx,
+      });
+      io.emit(`wallet:updated:${user._id}`, { balance: user.walletBalance });
+      io.to('admin_room').emit('admin:new_transaction', { transaction: populatedTx });
+      io.emit('admin:new_transaction', { transaction: populatedTx });
+    }
+
+    return res.status(200).json({
+      success: true,
+      credited: true,
+      message: `Payment Auto-Detected! ₹${inrAmount.toLocaleString('en-IN')} (${verified.amountUSDT} USDT) credited to your balance.`,
+      transaction: populatedTx,
+      walletBalance: user.walletBalance,
+      amountCredited: inrAmount,
+      amountUSDT: verified.amountUSDT,
+      txHash: targetHash,
+      chain: verified.chainName,
+    });
+  } catch (err) {
+    console.error('[Check Incoming Crypto Error]', err);
+    return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
+  }
+});
+
 
 // 1. Initiate Deposit (Generate Dynamic UPI QR Code)
 router.post('/deposit/qr', verifyToken, async (req, res) => {

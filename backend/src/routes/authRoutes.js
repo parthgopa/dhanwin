@@ -126,7 +126,7 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// 2. Register User (Verifies Email OTP & Credits ₹1 Signup Bonus)
+// 2. Register User (Verifies Email OTP)
 router.post('/register', async (req, res) => {
   try {
     const { username, phone, email, password, otp, tempToken } = req.body;
@@ -180,14 +180,14 @@ router.post('/register', async (req, res) => {
 
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
 
-    // Create user with ₹1.00 Signup Bonus
+    // Create user with ₹0 initial balance
     const newUser = await User.create({
       username: regUsername,
       phone: regPhone,
       email: regEmail,
       passwordHash,
       role: 'USER',
-      walletBalance: 1.00, // ₹1 Signup Bonus
+      walletBalance: 0,
       currentSessionId: sessionId,
     });
 
@@ -198,7 +198,7 @@ router.post('/register', async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Account verified & created successfully! ₹1 Signup Bonus credited.',
+      message: 'Account verified & created successfully! Welcome to Dhanwin.',
       token,
       user: {
         id: newUser._id,

@@ -5,7 +5,7 @@ import wingoImg from '../images/wingo-logo.png';
 import aviatorImg from '../images/aviator-logo.png';
 import chickenRoadImg from '../images/chicken-road.png';
 import cricketImg from '../images/cricket-logo.jpeg';
-import scrollWinImg from '../images/scroll-win-logo.jpeg';
+import vortexImg from '../images/vortex-logo.jpg';
 import gorushImg from '../images/gorush-logo.jpeg';
 
 export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth, onOpenSidebar }) => {
@@ -181,13 +181,13 @@ export const HomePage = ({ onSelectGame, onOpenDeposit, onOpenAuth, onOpenSideba
             </div>
           </div>
 
-          {/* 5. SCROLL WIN (COMING SOON) */}
+          {/* 5. VORTEX (COMING SOON) */}
           <div
-            className="aspect-[3/4] rounded-2xl sm:rounded-3xl overflow-hidden bg-[#1e1308] border border-amber-500/20 shadow-xl relative flex items-center justify-center select-none cursor-not-allowed opacity-75 pointer-events-none p-0.5"
+            className="aspect-[3/4] rounded-2xl sm:rounded-3xl overflow-hidden bg-[#130722] border border-purple-500/20 shadow-xl relative flex items-center justify-center select-none cursor-not-allowed opacity-75 pointer-events-none p-0.5"
           >
             <img
-              src={scrollWinImg}
-              alt="Scroll Win"
+              src={vortexImg}
+              alt="Vortex"
               className="w-full h-full object-contain filter grayscale-[15%]"
             />
             {/* Light white text overlay */}
