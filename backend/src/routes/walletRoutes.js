@@ -238,6 +238,37 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
     const uncreditedHashes = detectedHashes.filter((h) => !creditedSet.has(h.toLowerCase().replace(/^0x/, '')));
 
     if (uncreditedHashes.length === 0) {
+      // Check if there is a recently credited deposit (within last 15 minutes) for this user that matches detected transactions
+      const recentCredited = await WalletTransaction.findOne({
+        userId: user._id,
+        type: 'DEPOSIT',
+        status: 'APPROVED',
+        createdAt: { $gte: new Date(Date.now() - 15 * 60 * 1000) },
+        $or: [
+          { utrNumber: { $in: detectedHashes } },
+          { utrNumber: { $in: detectedHashes.map((h) => '0x' + h) } },
+          { utrNumber: { $in: detectedHashes.map((h) => h.replace(/^0x/, '')) } },
+        ],
+      }).sort({ createdAt: -1 });
+
+      if (recentCredited) {
+        recentCredited.userNotified = true;
+        await recentCredited.save();
+
+        const amountUSDT = Number(recentCredited.adminNote?.match(/•\s*([\d.]+)\s*USDT/)?.[1] || 25);
+        return res.json({
+          success: true,
+          credited: true,
+          message: `Payment Confirmed! ₹${recentCredited.amount.toLocaleString('en-IN')} (${amountUSDT} USDT) credited to your wallet balance.`,
+          transaction: recentCredited,
+          walletBalance: user.walletBalance,
+          amountCredited: recentCredited.amount,
+          amountUSDT,
+          txHash: recentCredited.utrNumber,
+          chain: preferredChain,
+        });
+      }
+
       return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
     }
 

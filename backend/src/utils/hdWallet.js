@@ -38,12 +38,28 @@ export const toBase58Check = (hexWithoutChecksum) => {
 };
 
 /**
+ * Cleans and sanitizes a 12- or 24-word BIP-39 mnemonic phrase.
+ * Strips quotes, dots/periods, special symbols, and collapses whitespace.
+ */
+export const cleanMnemonic = (raw) => {
+  if (!raw) return '';
+  return raw
+    .replace(/["']/g, '')
+    .replace(/[^a-zA-Z\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .join(' ')
+    .toLowerCase();
+};
+
+/**
  * Returns the cached BIP-44 base HD Node at path m/44'/60'/0'/0 for EVM
  */
 export const getBaseHDNode = () => {
   if (cachedBaseNode) return cachedBaseNode;
 
-  const mnemonic = (process.env.MASTER_WALLET_MNEMONIC || '').trim();
+  const raw = process.env.MASTER_WALLET_MNEMONIC || '';
+  const mnemonic = cleanMnemonic(raw);
   if (!mnemonic) {
     throw new Error('MASTER_WALLET_MNEMONIC is not configured in backend environment.');
   }
@@ -59,7 +75,8 @@ export const getBaseHDNode = () => {
 export const getBaseTronHDNode = () => {
   if (cachedBaseTronNode) return cachedBaseTronNode;
 
-  const mnemonic = (process.env.MASTER_WALLET_MNEMONIC || '').trim();
+  const raw = process.env.MASTER_WALLET_MNEMONIC || '';
+  const mnemonic = cleanMnemonic(raw);
   if (!mnemonic) {
     throw new Error('MASTER_WALLET_MNEMONIC is not configured in backend environment.');
   }
