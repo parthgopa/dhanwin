@@ -244,9 +244,13 @@ export const scanIncomingTronTransactions = async (tronAddress) => {
 
 /**
  * Scans public blockchain APIs for recent incoming transactions and token transfers to the Admin Wallet or user address.
- * Returns an array of clean txHashes received in the last 15 minutes.
+ * If preferredChain is supplied, prioritizes/scans that specific network to avoid unnecessary rate limits.
+ *
+ * @param {string} adminAddress - EVM (0x...) or TRON (T...) deposit address
+ * @param {string} preferredChain - 'sepolia', 'bsc', 'polygon', 'arbitrum', 'base', 'optimism', 'ethereum', 'tron', etc.
+ * @returns {Promise<string[]>} Array of clean txHashes received recently
  */
-export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWallet()) => {
+export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWallet(), preferredChain = null) => {
   if (adminAddress && adminAddress.startsWith('T')) {
     return await scanIncomingTronTransactions(adminAddress);
   }
@@ -254,20 +258,39 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
   const target = adminAddress.toLowerCase();
   const allowTestnet = process.env.ALLOW_CRYPTO_TESTNET !== 'false';
 
-  const endpoints = [
-    { name: 'Polygon', url: `https://polygon.blockscout.com/api/v2/addresses/${target}` },
-    { name: 'Arbitrum', url: `https://arbitrum.blockscout.com/api/v2/addresses/${target}` },
-    { name: 'Base', url: `https://base.blockscout.com/api/v2/addresses/${target}` },
-    { name: 'Optimism', url: `https://optimism.blockscout.com/api/v2/addresses/${target}` },
-    { name: 'Ethereum', url: `https://eth.blockscout.com/api/v2/addresses/${target}` },
-    { name: 'Scroll', url: `https://scroll.blockscout.com/api/v2/addresses/${target}` },
-  ];
+  const BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+  };
 
-  if (allowTestnet) {
-    endpoints.push({
-      name: 'Sepolia',
-      url: `https://eth-sepolia.blockscout.com/api/v2/addresses/${target}`,
-    });
+  const NETWORK_ENDPOINTS = {
+    polygon: { name: 'Polygon', url: `https://polygon.blockscout.com/api/v2/addresses/${target}` },
+    arbitrum: { name: 'Arbitrum', url: `https://arbitrum.blockscout.com/api/v2/addresses/${target}` },
+    base: { name: 'Base', url: `https://base.blockscout.com/api/v2/addresses/${target}` },
+    optimism: { name: 'Optimism', url: `https://optimism.blockscout.com/api/v2/addresses/${target}` },
+    ethereum: { name: 'Ethereum', url: `https://eth.blockscout.com/api/v2/addresses/${target}` },
+    scroll: { name: 'Scroll', url: `https://scroll.blockscout.com/api/v2/addresses/${target}` },
+    sepolia: { name: 'Sepolia', url: `https://eth-sepolia.blockscout.com/api/v2/addresses/${target}` },
+  };
+
+  const endpoints = [];
+
+  // If a preferred chain is specified (e.g. 'sepolia'), ALWAYS scan it directly
+  if (preferredChain && NETWORK_ENDPOINTS[preferredChain]) {
+    endpoints.push(NETWORK_ENDPOINTS[preferredChain]);
+  } else {
+    // If no specific chain requested, scan major EVM chains
+    endpoints.push(
+      NETWORK_ENDPOINTS.polygon,
+      NETWORK_ENDPOINTS.arbitrum,
+      NETWORK_ENDPOINTS.base,
+      NETWORK_ENDPOINTS.optimism,
+      NETWORK_ENDPOINTS.ethereum,
+      NETWORK_ENDPOINTS.scroll
+    );
+    if (allowTestnet || preferredChain === 'sepolia') {
+      endpoints.push(NETWORK_ENDPOINTS.sepolia);
+    }
   }
 
   const detectedHashes = new Set();
@@ -278,8 +301,20 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
     endpoints.map(async (ep) => {
       try {
         const [txRes, tokRes] = await Promise.all([
-          fetch(`${ep.url}/transactions`, { signal: AbortSignal.timeout(3000) }).then((r) => r.json()).catch(() => null),
-          fetch(`${ep.url}/token-transfers`, { signal: AbortSignal.timeout(3000) }).then((r) => r.json()).catch(() => null),
+          fetch(`${ep.url}/transactions`, {
+            headers: BROWSER_HEADERS,
+            signal: AbortSignal.timeout(6000),
+          }).then((r) => (r.ok ? r.json() : null)).catch((e) => {
+            console.warn(`[Blockscout] ${ep.name} /transactions fetch warning:`, e.message);
+            return null;
+          }),
+          fetch(`${ep.url}/token-transfers`, {
+            headers: BROWSER_HEADERS,
+            signal: AbortSignal.timeout(6000),
+          }).then((r) => (r.ok ? r.json() : null)).catch((e) => {
+            console.warn(`[Blockscout] ${ep.name} /token-transfers fetch warning:`, e.message);
+            return null;
+          }),
         ]);
 
         if (txRes && Array.isArray(txRes.items)) {
@@ -313,8 +348,8 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
             }
           }
         }
-      } catch {
-        // Silently skip if endpoint is busy
+      } catch (err) {
+        console.warn(`[Blockscout] ${ep.name} scan error:`, err.message);
       }
     })
   );

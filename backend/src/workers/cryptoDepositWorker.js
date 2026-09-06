@@ -14,6 +14,8 @@ let workerInterval = null;
 const lastScannedBlocks = {};
 
 const workerInFlightHashes = new Set();
+let evmScanUserIndex = 0;
+let tronScanUserIndex = 0;
 
 /**
  * Process and credit a detected deposit atomically
@@ -201,36 +203,48 @@ export const scanBlockchainDepositBlocks = async (io) => {
       }
     }
 
-    // Scan active EVM user deposit addresses via Blockscout explorer APIs (catches native ETH/BNB/MATIC + token transfers)
+    // Scan active EVM user deposit addresses gently via sequential rotation (prevents Blockscout rate-limits)
     if (usersWithAddresses && usersWithAddresses.length > 0) {
-      for (const u of usersWithAddresses.slice(0, 10)) {
-        try {
-          const evmHashes = await scanIncomingTransactions(u.cryptoDepositAddress);
-          for (const eh of evmHashes) {
-            await creditDetectedDeposit(eh, allowTestnet ? 'sepolia' : 'polygon', u.cryptoDepositAddress, io);
+      // Pick next 2 users in rotation
+      const count = Math.min(2, usersWithAddresses.length);
+      const targetChain = allowTestnet ? 'sepolia' : 'polygon';
+      for (let i = 0; i < count; i++) {
+        const u = usersWithAddresses[(evmScanUserIndex + i) % usersWithAddresses.length];
+        if (u && u.cryptoDepositAddress) {
+          try {
+            const evmHashes = await scanIncomingTransactions(u.cryptoDepositAddress, targetChain);
+            for (const eh of evmHashes) {
+              await creditDetectedDeposit(eh, targetChain, u.cryptoDepositAddress, io);
+            }
+          } catch {
+            // Silently continue
           }
-        } catch {
-          // Silently continue
         }
       }
+      evmScanUserIndex = (evmScanUserIndex + count) % usersWithAddresses.length;
     }
 
-    // Scan active TRON user deposit addresses
+    // Scan active TRON user deposit addresses gently via sequential rotation
     const usersWithTron = await User.find({
       tronDepositAddress: { $exists: true, $ne: null },
     }).select('_id tronDepositAddress').lean();
 
     if (usersWithTron && usersWithTron.length > 0) {
-      for (const u of usersWithTron.slice(0, 10)) {
-        try {
-          const tronHashes = await scanIncomingTransactions(u.tronDepositAddress);
-          for (const th of tronHashes) {
-            await creditDetectedDeposit(th, 'tron', u.tronDepositAddress, io);
+      const count = Math.min(2, usersWithTron.length);
+      for (let i = 0; i < count; i++) {
+        const u = usersWithTron[(tronScanUserIndex + i) % usersWithTron.length];
+        if (u && u.tronDepositAddress) {
+          try {
+            const tronHashes = await scanIncomingTransactions(u.tronDepositAddress, 'tron');
+            for (const th of tronHashes) {
+              await creditDetectedDeposit(th, 'tron', u.tronDepositAddress, io);
+            }
+          } catch {
+            // Silently continue
           }
-        } catch {
-          // Silently continue
         }
       }
+      tronScanUserIndex = (tronScanUserIndex + count) % usersWithTron.length;
     }
   } catch (err) {
     console.error('[Crypto Worker Error]', err.message);

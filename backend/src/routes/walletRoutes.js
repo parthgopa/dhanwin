@@ -220,8 +220,8 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
       return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
     }
 
-    // Scan incoming transactions specifically for this user's dedicated address
-    const detectedHashes = await scanIncomingTransactions(scanAddress);
+    // Scan incoming transactions specifically for this user's dedicated address and preferred chain
+    const detectedHashes = await scanIncomingTransactions(scanAddress, preferredChain);
     if (!detectedHashes || detectedHashes.length === 0) {
       return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
     }
