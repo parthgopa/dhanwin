@@ -273,11 +273,11 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
     sepolia: { name: 'Sepolia', url: `https://eth-sepolia.blockscout.com/api/v2/addresses/${target}` },
   };
 
-  const endpoints = [];
-
-  // If a preferred chain is specified (e.g. 'sepolia'), ALWAYS scan it directly
+  // If a preferred chain is specified (e.g. 'sepolia'), scan it directly
   if (preferredChain && NETWORK_ENDPOINTS[preferredChain]) {
-    endpoints.push(NETWORK_ENDPOINTS[preferredChain]);
+    if (preferredChain !== 'sepolia' || allowTestnet) {
+      endpoints.push(NETWORK_ENDPOINTS[preferredChain]);
+    }
   } else {
     // If no specific chain requested, scan major EVM chains
     endpoints.push(
@@ -288,7 +288,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
       NETWORK_ENDPOINTS.ethereum,
       NETWORK_ENDPOINTS.scroll
     );
-    if (allowTestnet || preferredChain === 'sepolia') {
+    if (allowTestnet) {
       endpoints.push(NETWORK_ENDPOINTS.sepolia);
     }
   }
