@@ -171,12 +171,11 @@ export const DepositModal = ({ isOpen, onClose }) => {
     let isMounted = true;
     console.log('[DepositModal] Starting live blockchain deposit auto-detection poller for chain:', selectedChain);
 
-    const pollInterval = setInterval(async () => {
+    const checkNow = async () => {
       try {
         const res = await walletAPI.checkIncomingCryptoDeposit(selectedChain);
         if (res && res.credited && isMounted) {
           console.log('[DepositModal] Incoming payment automatically detected on-chain!', res);
-          clearInterval(pollInterval);
           setIsPaymentCredited(true);
           if (res.walletBalance !== undefined && updateBalance) {
             updateBalance(res.walletBalance);
@@ -185,14 +184,29 @@ export const DepositModal = ({ isOpen, onClose }) => {
           setStep(4);
           showToast(res.message || 'Payment Auto-Detected & Credited Successfully!', 'success');
           if (refreshUser) refreshUser();
+          return true;
         }
       } catch (err) {
         // Silently continue polling
       }
-    }, 4000);
+      return false;
+    };
+
+    // Fast initial check after 1.5s
+    const initialTimer = setTimeout(() => {
+      if (isMounted) checkNow();
+    }, 1500);
+
+    // Continuous 3s polling while user stays on Step 2
+    const pollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      const done = await checkNow();
+      if (done) clearInterval(pollInterval);
+    }, 3000);
 
     return () => {
       isMounted = false;
+      clearTimeout(initialTimer);
       clearInterval(pollInterval);
     };
   }, [isOpen, step, selectedChain, refreshUser, updateBalance, showToast]);
