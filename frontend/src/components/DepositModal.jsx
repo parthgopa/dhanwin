@@ -817,11 +817,6 @@ export const DepositModal = ({ isOpen, onClose }) => {
                     <span className="text-gray-400">
                       Your {isTron ? 'TRON (TRC-20)' : 'EVM'} Deposit Address:
                     </span>
-                    {myDepositIndex !== null && (
-                      <span className="text-[9px] sm:text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        Acc #{myDepositIndex}
-                      </span>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -996,11 +991,6 @@ export const DepositModal = ({ isOpen, onClose }) => {
                   <div className="min-w-0 flex-1 mr-2">
                     <div className="text-[9px] sm:text-[10px] text-gray-400 font-medium flex items-center gap-1 sm:gap-1.5 flex-wrap">
                       <span>Personal {isTron ? 'TRON (TRC-20)' : 'EVM'} Address:</span>
-                      {myDepositIndex !== null && (
-                        <span className="text-[8px] sm:text-[9px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          Acc #{myDepositIndex}
-                        </span>
-                      )}
                     </div>
                     <div className="font-mono text-[11px] sm:text-xs text-amber-300 truncate">{activeDepositAddress}</div>
                   </div>
