@@ -93,7 +93,12 @@ export const DepositModal = ({ isOpen, onClose }) => {
 
   // ── FETCH USER'S DEDICATED HD DEPOSIT ADDRESS ──────────────────────────────
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setMyDepositAddress('');
+      setMyTronDepositAddress('');
+      setMyDepositIndex(null);
+      return;
+    }
     let isMounted = true;
     const fetchAddress = async () => {
       setFetchingAddress(true);
@@ -119,7 +124,7 @@ export const DepositModal = ({ isOpen, onClose }) => {
     };
     fetchAddress();
     return () => { isMounted = false; };
-  }, [isOpen]);
+  }, [isOpen, user?.id, user?._id]);
 
   // ── REAL-TIME WEBSOCKET DEPOSIT APPROVAL LISTENER ─────────────────────────
   useEffect(() => {
@@ -216,38 +221,43 @@ export const DepositModal = ({ isOpen, onClose }) => {
     }
   };
 
-  // Helper to safely proceed to step 2 ensuring address is fetched
+  // Helper to safely proceed to step 2 ensuring fresh dedicated address is fetched
   const handleProceedToStep2 = async () => {
-    if (!myDepositAddress || !myTronDepositAddress) {
-      setFetchingAddress(true);
-      try {
-        const res = await walletAPI.getMyCryptoDepositAddress();
-        if (res) {
-          if (res.depositAddress) {
-            setMyDepositAddress(res.depositAddress);
-            setMyDepositIndex(res.index);
-          }
-          if (res.tronDepositAddress) {
-            setMyTronDepositAddress(res.tronDepositAddress);
-          }
-          if (res.usdtInrRate) {
-            setLiveUsdtRate(res.usdtInrRate);
-          }
+    setFetchingAddress(true);
+    try {
+      const res = await walletAPI.getMyCryptoDepositAddress();
+      if (res) {
+        if (res.depositAddress) {
+          setMyDepositAddress(res.depositAddress);
+          setMyDepositIndex(res.index);
         }
-      } catch (err) {
-        console.warn('[DepositModal] Failed to ensure personal HD address:', err.message);
-      } finally {
-        setFetchingAddress(false);
+        if (res.tronDepositAddress) {
+          setMyTronDepositAddress(res.tronDepositAddress);
+        }
+        if (res.usdtInrRate) {
+          setLiveUsdtRate(res.usdtInrRate);
+        }
       }
+    } catch (err) {
+      console.warn('[DepositModal] Failed to ensure personal HD address:', err.message);
+    } finally {
+      setFetchingAddress(false);
+      setStep(2);
     }
-    setStep(2);
   };
 
   // Close & refresh user balance on success without breaking session with hard reload
   const handleDoneAndRefresh = async () => {
     try {
+      setStep(1);
+      setVerifiedTxData(null);
+      setIsPaymentCredited(false);
+      setMyDepositAddress('');
+      setMyTronDepositAddress('');
+      setMyDepositIndex(null);
+      setTxHash('');
+      setManualTxHash('');
       onClose();
-      resetModal();
       if (refreshUser) {
         await refreshUser();
       }
@@ -288,16 +298,12 @@ export const DepositModal = ({ isOpen, onClose }) => {
     setIsPaymentCredited(false);
     setShowCloseConfirm(false);
     setShowHelpModal(false);
+    setMyDepositAddress('');
+    setMyTronDepositAddress('');
+    setMyDepositIndex(null);
     if (refreshUser) refreshUser();
     onClose();
   };
-
-  // Automatic safeguard: if modal unmounts after deposit was completed, reload to sync balance everywhere
-  useEffect(() => {
-    if (!isOpen && isPaymentCredited) {
-      window.location.reload();
-    }
-  }, [isOpen, isPaymentCredited]);
 
   if (!isOpen) return null;
 
@@ -836,12 +842,21 @@ export const DepositModal = ({ isOpen, onClose }) => {
                 <button
                   type="button"
                   onClick={handleProceedToStep2}
-                  disabled={loading || !usdtAmount || Number(usdtAmount) < MIN_DEPOSIT_AMOUNT_USDT}
+                  disabled={loading || fetchingAddress || !usdtAmount || Number(usdtAmount) < MIN_DEPOSIT_AMOUNT_USDT}
                   className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-black py-3 sm:py-3.5 rounded-xl sm:rounded-2xl shadow-xl shadow-amber-500/20 transition flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer disabled:opacity-50 active:scale-[0.98]"
                 >
-                  <QrCode className="w-4 h-4" />
-                  <span>Proceed to Scan QR Code ({usdtAmount} USDT)</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {fetchingAddress ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Fetching Dedicated Address...</span>
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="w-4 h-4" />
+                      <span>Proceed to Scan QR Code ({usdtAmount} USDT)</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
 
                 {window.ethereum && (
@@ -934,13 +949,20 @@ export const DepositModal = ({ isOpen, onClose }) => {
 
                 {/* QR Code Container */}
                 <div className="inline-block p-3 sm:p-4 bg-white rounded-2xl sm:rounded-3xl shadow-2xl border-2 sm:border-4 border-amber-500/40 max-w-full">
-                  <QRCodeSVG
-                    value={getQrValue()}
-                    size={175}
-                    level="M"
-                    includeMargin={false}
-                    className="w-36 h-36 sm:w-48 sm:h-48 max-w-full"
-                  />
+                  {fetchingAddress || !activeDepositAddress ? (
+                    <div className="w-36 h-36 sm:w-48 sm:h-48 flex flex-col items-center justify-center text-gray-800 space-y-2">
+                      <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-[11px] font-bold text-gray-600">Generating QR...</span>
+                    </div>
+                  ) : (
+                    <QRCodeSVG
+                      value={getQrValue()}
+                      size={175}
+                      level="M"
+                      includeMargin={false}
+                      className="w-36 h-36 sm:w-48 sm:h-48 max-w-full"
+                    />
+                  )}
                 </div>
 
                 {/* How to Make Payment Pop-up Trigger */}
