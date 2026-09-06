@@ -263,7 +263,14 @@ export const DepositModal = ({ isOpen, onClose }) => {
   // Close & refresh user balance on success without breaking session with hard reload
   const handleDoneAndRefresh = async () => {
     try {
+      if (verifiedTxData?.transaction?._id || verifiedTxData?._id) {
+        const txId = verifiedTxData?.transaction?._id || verifiedTxData?._id;
+        walletAPI.markNotified([txId]).catch(() => {});
+      }
       setStep(1);
+      setUsdtAmount(1);
+      setSelectedChain('bsc');
+      setNetworkDropdownOpen(false);
       setVerifiedTxData(null);
       setIsPaymentCredited(false);
       setMyDepositAddress('');

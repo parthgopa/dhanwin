@@ -282,8 +282,8 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
     }
   } else {
     // If no specific chain requested, scan major EVM chains
-    endpoints.push(
-      NETWORK_ENDPOINTS.polygon,
+    endpoints.push( 
+      NETWORK_ENDPOINTS.polygon,    
       NETWORK_ENDPOINTS.arbitrum,
       NETWORK_ENDPOINTS.base,
       NETWORK_ENDPOINTS.optimism,

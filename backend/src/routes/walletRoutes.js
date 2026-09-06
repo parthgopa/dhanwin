@@ -142,6 +142,7 @@ router.post('/deposit/crypto/verify-tx', verifyToken, async (req, res) => {
         qrReference: verified.contract,
         chain: verified.chain,
       },
+      userNotified: true,
       processedAt: new Date(),
     });
 
@@ -245,7 +246,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
         type: 'DEPOSIT',
         status: 'APPROVED',
         userNotified: false,
-        createdAt: { $gte: new Date(Date.now() - 90 * 1000) },
+        createdAt: { $gte: new Date(Date.now() - 25 * 1000) },
         $or: [
           { utrNumber: { $in: detectedHashes } },
           { utrNumber: { $in: detectedHashes.map((h) => '0x' + h) } },
@@ -328,6 +329,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
           qrReference: verified.contract,
           chain: verified.chain,
         },
+        userNotified: true,
         processedAt: new Date(),
       });
 
