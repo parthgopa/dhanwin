@@ -273,6 +273,8 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
     sepolia: { name: 'Sepolia', url: `https://eth-sepolia.blockscout.com/api/v2/addresses/${target}` },
   };
 
+  const endpoints = [];
+
   // If a preferred chain is specified (e.g. 'sepolia'), scan it directly
   if (preferredChain && NETWORK_ENDPOINTS[preferredChain]) {
     if (preferredChain !== 'sepolia' || allowTestnet) {
