@@ -243,16 +243,20 @@ export const DepositModal = ({ isOpen, onClose }) => {
     setStep(2);
   };
 
-  // Close & refresh page on success
-  const handleDoneAndRefresh = () => {
+  // Close & refresh user balance on success without breaking session with hard reload
+  const handleDoneAndRefresh = async () => {
     try {
       onClose();
-    } finally {
-      window.location.reload();
+      resetModal();
+      if (refreshUser) {
+        await refreshUser();
+      }
+    } catch (e) {
+      console.warn('[DepositModal] Error refreshing user on close:', e.message);
     }
   };
 
-  // Smart close handler: prompts if payment is pending, reloads if payment was credited
+  // Smart close handler: prompts if payment is pending, closes & updates if payment was credited
   const handleCloseModal = () => {
     if (isPaymentCredited || step === 4 || verifiedTxData) {
       handleDoneAndRefresh();
@@ -1144,7 +1148,7 @@ export const DepositModal = ({ isOpen, onClose }) => {
                 className="w-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-black py-3 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
-                <span>Done • Start Playing (Refresh Page)</span>
+                <span>Done • Start Playing</span>
               </button>
             </div>
           )}

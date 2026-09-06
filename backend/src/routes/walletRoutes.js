@@ -256,6 +256,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
         await recentCredited.save();
 
         const amountUSDT = Number(recentCredited.adminNote?.match(/•\s*([\d.]+)\s*USDT/)?.[1] || 25);
+        console.log(`[Crypto Deposit] 🚀 Auto-Detected confirmed deposit for user ${user.username || user._id}: ₹${recentCredited.amount} (${amountUSDT} USDT) on ${preferredChain}! Tx: ${recentCredited.utrNumber}`);
         return res.json({
           success: true,
           credited: true,
@@ -323,6 +324,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
 
       user.walletBalance = Math.round(((user.walletBalance || 0) + inrAmount) * 100) / 100;
       await user.save();
+      console.log(`[Crypto Deposit] ⭐ Successfully verified & credited incoming deposit: ₹${inrAmount} (${verified.amountUSDT} USDT) on ${verified.chainName} to user ${user.username || user._id}! Tx: ${targetHash}`);
     } catch (createErr) {
       if (createErr.code === 11000) {
         // Already created by parallel request or background worker
