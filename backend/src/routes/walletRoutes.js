@@ -140,6 +140,7 @@ router.post('/deposit/crypto/verify-tx', verifyToken, async (req, res) => {
         accountNumber: cleanTxHash,
         upiId: verified.to,
         qrReference: verified.contract,
+        chain: verified.chain,
       },
       processedAt: new Date(),
     });
@@ -238,12 +239,13 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
     const uncreditedHashes = detectedHashes.filter((h) => !creditedSet.has(h.toLowerCase().replace(/^0x/, '')));
 
     if (uncreditedHashes.length === 0) {
-      // Check if there is a recently credited deposit (within last 15 minutes) for this user that matches detected transactions
+      // Check if there is an unnotified deposit credited within the last 90 seconds specifically for this chain
       const recentCredited = await WalletTransaction.findOne({
         userId: user._id,
         type: 'DEPOSIT',
         status: 'APPROVED',
-        createdAt: { $gte: new Date(Date.now() - 15 * 60 * 1000) },
+        userNotified: false,
+        createdAt: { $gte: new Date(Date.now() - 90 * 1000) },
         $or: [
           { utrNumber: { $in: detectedHashes } },
           { utrNumber: { $in: detectedHashes.map((h) => '0x' + h) } },
@@ -252,11 +254,17 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
       }).sort({ createdAt: -1 });
 
       if (recentCredited) {
+        const txChain = recentCredited.paymentDetails?.chain || '';
+        // If deposit was on a different chain, do NOT credit or notify on this chain
+        if (txChain && preferredChain && txChain.toLowerCase() !== preferredChain.toLowerCase()) {
+          return res.json({ success: true, credited: false, message: 'Listening on blockchain...' });
+        }
+
         recentCredited.userNotified = true;
         await recentCredited.save();
 
         const amountUSDT = Number(recentCredited.adminNote?.match(/•\s*([\d.]+)\s*USDT/)?.[1] || 25);
-        console.log(`[Crypto Deposit] 🚀 Auto-Detected confirmed deposit for user ${user.username || user._id}: ₹${recentCredited.amount} (${amountUSDT} USDT) on ${preferredChain}! Tx: ${recentCredited.utrNumber}`);
+        console.log(`[Crypto Deposit] 🚀 Auto-Detected confirmed deposit for user ${user.username || user._id}: ₹${recentCredited.amount} (${amountUSDT} USDT) on ${txChain || preferredChain}! Tx: ${recentCredited.utrNumber}`);
         return res.json({
           success: true,
           credited: true,
@@ -266,7 +274,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
           amountCredited: recentCredited.amount,
           amountUSDT,
           txHash: recentCredited.utrNumber,
-          chain: preferredChain,
+          chain: txChain || preferredChain,
         });
       }
 
@@ -318,6 +326,7 @@ router.get('/deposit/crypto/check-incoming', verifyToken, async (req, res) => {
           accountNumber: targetHash,
           upiId: verified.to,
           qrReference: verified.contract,
+          chain: verified.chain,
         },
         processedAt: new Date(),
       });

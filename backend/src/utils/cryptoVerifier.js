@@ -272,7 +272,7 @@ export const scanIncomingTransactions = async (adminAddress = getAdminCryptoWall
 
   const detectedHashes = new Set();
   const now = Date.now();
-  const MAX_AGE_MS = 24 * 60 * 60 * 1000; // Look back up to 24 hours for uncredited deposits
+  const MAX_AGE_MS = 30 * 60 * 1000; // Look back up to 30 minutes for live uncredited deposits
 
   await Promise.allSettled(
     endpoints.map(async (ep) => {

@@ -63,6 +63,7 @@ const creditDetectedDeposit = async (txHash, chainKey, targetAddress, io) => {
           accountNumber: cleanTxHash,
           upiId: verified.to,
           qrReference: verified.contract,
+          chain: verified.chain,
         },
         processedAt: new Date(),
       });
